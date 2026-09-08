@@ -218,39 +218,9 @@
             border-color: rgba(0,240,255,0.35);
             transition: all 0.3s ease;
         }
-        /* ===== 开局视频（loader） ===== */
-        #loader{position:fixed;inset:0;background:#0b0e1f;z-index:9999;overflow:hidden;transition:opacity 1.8s ease;}
-        #loader.hidden{opacity:0;pointer-events:none;}
-        #loader video{width:100%;height:100%;object-fit:cover;display:block;transition:opacity 1.8s ease,transform 1.8s ease,filter 1.8s ease;}
-        #loader.hidden video{opacity:0;transform:scale(1.08);filter:blur(12px);}
-        #loader .btn-row{transition:opacity 0.6s ease;}
-        #loader.hidden .btn-row{opacity:0;}
-        #loader .entry{transition:background 0.3s,border-color 0.3s,color 0.3s,transform 0.3s,opacity 0.6s ease;}
-        /* 主页面渐显（渐变进入） */
-        body.entered header{animation:entFade 0.9s ease both;}
-        body.entered main{animation:entFade 1.1s 0.2s ease both;}
-        @keyframes entFade{from{opacity:0;transform:translateY(24px);}to{opacity:1;transform:none;}}
-        #loader .btn-row{position:absolute;left:50%;bottom:2.4rem;transform:translateX(-50%);display:flex;gap:1.2rem;z-index:2;}
-        #loader .entry{display:flex;align-items:center;gap:0.6rem;background:linear-gradient(135deg,#2b2b2b,#111);border:1px solid rgba(255,255,255,0.18);color:#fff;padding:0.72rem 2.1rem;font-size:0.85rem;letter-spacing:2px;cursor:pointer;font-family:'Segoe UI','Microsoft YaHei',sans-serif;border-radius:999px;box-shadow:0 4px 18px rgba(0,0,0,0.45);transition:all 0.3s;}
-        #loader .entry:hover{background:linear-gradient(135deg,#3a3a3a,#1a1a1a);border-color:#00f0ff;color:#00f0ff;transform:translateY(-2px);}
-        #loader .entry .ic{font-size:1.05rem;line-height:1;color:#e8e8e8;}
-        #loader .entry:hover .ic{color:#00f0ff;}
-        .entry{position:relative;}
-        .loader-toast{position:absolute;left:50%;bottom:calc(100% + 16px);transform:translateX(-50%) translateY(10px) scale(0.75);background:#eaf8ff;color:#0b0e1f;padding:0.72rem 1.5rem;font-size:0.98rem;letter-spacing:0.5px;border-radius:26px;box-shadow:0 10px 28px rgba(0,0,0,0.5),0 0 0 1px rgba(255,255,255,0.25);opacity:0;pointer-events:none;z-index:3;white-space:nowrap;font-family:'Segoe UI','Microsoft YaHei',sans-serif;transition:opacity 0.35s,transform 0.35s;}
-        .loader-toast::before{content:'';position:absolute;top:-15px;left:18px;width:32px;height:32px;background:#eaf8ff;border-radius:50%;}
-        .loader-toast::after{content:'';position:absolute;top:-8px;left:48px;width:22px;height:22px;background:#eaf8ff;border-radius:50%;}
-        .loader-toast .tail{content:'';position:absolute;bottom:-9px;left:50%;transform:translateX(-50%) rotate(45deg);width:18px;height:18px;background:#eaf8ff;border-radius:4px;}
-        .loader-toast.show{opacity:1;transform:translateX(-50%) translateY(0) scale(1);}
     </style>
 </head>
 <body class="min-h-screen text-gray-100 overflow-x-hidden grid-bg">
-<div id="loader">
-  <video id="introVideo" src="start_up.mp4" autoplay playsinline preload="auto"></video>
-  <div class="btn-row">
-    <button class="entry" onclick="hideLoader()"><span class="ic">&#9881;</span>进入系统</button>
-    <button class="entry" onclick="enterGame()"><span class="ic">&#127918;</span>进入游戏<span class="loader-toast" id="loaderToast"><span class="tail"></span>该工作的时候还是要工作的</span></button>
-  </div>
-</div>
 <canvas id="particles"></canvas>
 <div class="img-preview-mask" id="previewMask">
     <div class="preview-toolbar">
@@ -955,8 +925,7 @@ class Particle {
     }
 }
 for (let i = 0; i < 80; i++) particles.push(new Particle());
-// 开局视频播放期间暂停粒子动画（避免与视频解码抢资源导致卡顿），进入系统后恢复
-window.particlesPaused = true;
+window.particlesPaused = false;
 function animate() {
     if (window.particlesPaused) { requestAnimationFrame(animate); return; }
     ctx.clearRect(0, 0, w, h);
@@ -3674,54 +3643,7 @@ loadModels();
 refreshTrainModels();
 </script>
 <script>
-/* ===== 开局视频逻辑 ===== */
-function hideLoader(){
-  var l=document.getElementById('loader');
-  if(!l||l.classList.contains('hidden'))return;
-  l.classList.add('hidden');
-  if(window.particlesPaused!==undefined) window.particlesPaused=false;
-  document.body.classList.add('entered');
-  // JS 帧动画实现明显渐变：视频渐隐+虚化拉远，loader 淡出，1.6s 后移除
-  var v=document.getElementById('introVideo');
-  var t0=performance.now(), dur=1600;
-  function step(now){
-    var p=Math.min(1,(now-t0)/dur);
-    var o=String(Math.max(0,1-p));
-    l.style.opacity=o;
-    if(v){ v.style.opacity=o; v.style.filter='blur('+(p*12)+'px)'; v.style.transform='scale('+(1+p*0.08)+')'; }
-    if(p<1){ requestAnimationFrame(step); }
-    else { setTimeout(function(){ if(l&&l.parentNode) l.parentNode.removeChild(l); }, 150); }
-  }
-  requestAnimationFrame(step);
-}
-// 进入游戏：先弹泡泡提醒，停 1s 后再进入系统
-function enterGame(){
-  var t=document.getElementById('loaderToast');
-  if(!t) { hideLoader(); return; }
-  t.classList.add('show');
-  setTimeout(function(){ hideLoader(); }, 1000);
-}
-// 点击「进入系统 / 进入游戏」按钮后才进入主页面，播放结束不自动跳转
-// 默认开启声音：优先尝试带声音自动播放；若被浏览器策略拦截则退回静音播放，并在首次点击页面任意位置时自动开启声音
-window.addEventListener('load',function(){
-  var v=document.getElementById('introVideo');
-  if(!v)return;
-  // 视频播放结束不自动跳转，必须点击下方按钮（进入系统 / 进入游戏）才进入主页面
-  v.muted=false;
-  var p=v.play();
-  if(p!==undefined){
-    p.catch(function(){
-      v.muted=true;
-      v.play();
-      var once=function(){
-        v.muted=false;
-        v.play();
-        document.removeEventListener('click',once);
-      };
-      document.addEventListener('click',once);
-    });
-  }
-});
+
 
 /* ============ 手势识别启动训练（MediaPipe GestureRecognizer，CDN 动态加载） ============ */
 var GESTURE_CFG = {
