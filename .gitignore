@@ -1,0 +1,36 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---- 虚拟环境 ----
+.venv/
+venv/
+env/
+ENV/
+
+# ---- IDE / 编辑器 ----
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ---- 运行期数据（自动生成，可随时清空）----
+backend/uploads/
+uploads/
+
+# ---- 模型与大数据文件 ----
+*.joblib
+*.pt
+*.pth
+*.onnx
+*.h5
+
+# ---- 日志 / 临时文件 ----
+*.log
+*.tmp
+.DS_Store
+Thumbs.db

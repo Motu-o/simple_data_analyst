@@ -1,0 +1,33 @@
+# ================= 数据集分析系统 后端依赖 =================
+# 本文件基于 data_analyst conda 环境（Python 3.12）实际安装版本生成，可直接复现环境。
+# 安装命令：pip install -r requirements.txt
+
+# ---- Web 服务 ----
+fastapi==0.141.1
+uvicorn==0.52.4
+python-multipart==0.0.32      # FastAPI 文件上传必需
+
+# ---- 数据处理 ----
+pandas==3.0.5
+numpy==2.5.2
+openpyxl==3.1.5               # 读取 .xlsx / .xls
+requests==2.34.2              # 调用本地 Ollama 接口
+
+# ---- 可视化 ----
+matplotlib==3.11.1            # 图表绘制（折线/柱状/箱线/小提琴/热力图等，含实时绘制动画帧）
+
+# ---- 机器学习（预测 / 训练） ----
+scikit-learn==1.9.0           # 回归 / 分类 / 聚类 / 神经网络 MLP / 交叉验证
+joblib==1.6.0                 # 训练模型打包/加载（best_loss / last_loss）
+scipy==1.18.1                 # 部分模型与指标计算依赖
+
+# ---- 图片数据模块（ResNet50 训练 / 评估 / 推理） ----
+# 本机实际为 CUDA 版：torch 2.5.1+cu121 / torchvision 0.20.1+cu121（NVIDIA GPU + CUDA 12.1）
+# 复现 CUDA 版安装：
+#   pip install torch==2.5.1+cu121 torchvision==0.20.1+cu121 --index-url https://download.pytorch.org/whl/cu121
+# 仅 CPU 使用则去掉 +cu121：
+torch==2.5.1
+torchvision==0.20.1
+
+# ---- 打包为 exe（可选） ----
+# 如需打包可执行文件，额外安装：pip install pyinstaller
