@@ -332,11 +332,11 @@
         <div id="mainWorkspace" class="flex flex-col gap-4">
         <!-- 功能导航栏：4 块等宽均分、间距平均、左右对齐 -->
         <div class="glass rounded-xl px-2 py-1.5 grid grid-cols-4 gap-1.5">
-            <button class="nav-func tab-item active whitespace-nowrap px-2 py-1.5 text-sm rounded border border-neonBlue/30 transition-all hover:bg-neonBlue/10 flex items-center justify-center" data-panel="clean">
-                <i class="fa fa-eraser mr-1"></i> 数据清洗
+            <button class="nav-func tab-item active whitespace-nowrap px-2 py-1.5 text-sm rounded border border-neonBlue/30 transition-all hover:bg-neonBlue/10 flex items-center justify-center" data-panel="eda">
+                <i class="fa fa-bar-chart mr-1"></i> 数据探索
             </button>
-            <button class="nav-func tab-item whitespace-nowrap px-2 py-1.5 text-sm rounded border border-neonBlue/30 transition-all hover:bg-neonBlue/10 flex items-center justify-center" data-panel="eda">
-                <i class="fa fa-bar-chart mr-1"></i> EDA分析
+            <button class="nav-func tab-item whitespace-nowrap px-2 py-1.5 text-sm rounded border border-neonBlue/30 transition-all hover:bg-neonBlue/10 flex items-center justify-center" data-panel="clean">
+                <i class="fa fa-cogs mr-1"></i> 特征工程
             </button>
             <button class="nav-func tab-item whitespace-nowrap px-2 py-1.5 text-sm rounded border border-neonBlue/30 transition-all hover:bg-neonBlue/10 flex items-center justify-center" data-panel="train">
                 <i class="fa fa-cog mr-1"></i> 模型训练
@@ -347,48 +347,203 @@
         </div>
 
         <!-- ============ 数据清洗面板 ============ -->
-        <div id="panel-clean" class="glass rounded-xl p-4 panel-page space-y-4">
+        <div id="panel-clean" class="glass rounded-xl p-4 panel-page hidden space-y-4">
             <div class="flex justify-between items-center">
-                <h2 class="text-lg font-semibold flex items-center gap-2 text-neonPink"><i class="fa fa-eraser"></i> 数据清洗</h2>
+                <h2 class="text-lg font-semibold flex items-center gap-2 text-neonPink"><i class="fa fa-cogs"></i> 特征工程</h2>
                 <span id="cleanFileBadge" class="text-xs px-2 py-1 rounded border border-neonPurple/40 text-neonPurple truncate max-w-[220px]" title="当前数据集">未选择数据集</span>
             </div>
-            <div id="cleanOps" class="rounded-lg bg-[#111327] p-3 flex flex-wrap gap-2 content-start items-start max-h-x] overflow-auto scrollbar-thin">
-                <div class="text-gray-500 text-xs text-center py-4">上传数据集后在此选择清洗操作</div>
-            </div>
-            <div id="cleanToast" class="hidden px-3 py-2 rounded-lg border text-xs font-medium transition-opacity duration-300"></div>
-            <div class="flex gap-2">
-                <button id="runCleanBtn" class="px-4 py-2 rounded-lg bg-gradient-to-r from-neonBlue to-neonPurple font-bold hover:opacity-85">
-                    <i class="fa fa-magic"></i> 执行清洗
-                </button>
-                <button id="downloadCleanBtn" class="px-4 py-2 rounded-lg border border-neonGreen/50 text-neonGreen hover:bg-neonGreen/10 hidden">
-                    <i class="fa fa-download"></i> 下载清洗后数据
-                </button>
-            </div>
-            <div class="rounded-lg bg-[#111327] p-3">
-                <div id="cleanResultToggle" class="flex items-center justify-between cursor-pointer select-none">
-                    <span class="text-sm font-semibold text-neonPink flex items-center gap-2"><i class="fa fa-file-text-o"></i> 清洗结果 <i id="cleanResultChevron" class="fa fa-chevron-down text-xs opacity-60 transition-transform"></i></span>
-                    <span id="cleanResultBadge" class="text-xs text-gray-500">暂无</span>
-                </div>
-                <div id="cleanResultWrap" class="hidden mt-2">
-                    <div id="cleanResult" class="text-gray-200 text-sm whitespace-pre-wrap max-h-[420px] overflow-auto scrollbar-thin">
-                        <div class="text-gray-500">上传数据集并选择清洗内容后，结果将展示在此。</div>
+            <!-- ===== 特征工程（独立分区：特征构造） ===== -->
+            <div class="bg-[#0e1124] rounded-xl p-4 space-y-3 border border-neonPurple/20">
+                <div class="flex items-center gap-2 text-neonPurple text-sm font-semibold"><i class="fa fa-arrows-alt"></i> 特征工程</div>
+                <div id="feConstructPanel" class="space-y-2">
+                    <div class="rounded-lg bg-[#0b0e1f] p-2 space-y-1.5">
+                        <label class="flex items-center gap-2 text-sm cursor-pointer">
+                            <input type="checkbox" id="fecAggEnable" class="accent-neonPurple" checked>
+                            <span class="font-medium">聚合统计特征</span>
+                        </label>
+                        <p class="text-xs text-gray-500 pl-5">按分组列分组，计算数值列的均值、最大值、标准差、偏度等统计特征</p>
+                        <div class="flex flex-wrap gap-2 pl-5 items-end">
+                            <div><label class="text-xs text-gray-400 block">分组列</label><select id="fecAggGroup" class="fec-col bg-[#111327] text-xs border border-white/10 rounded px-2 py-1"></select></div>
+                            <div><label class="text-xs text-gray-400 block">聚合列</label><select id="fecAggValue" class="fec-col-num bg-[#111327] text-xs border border-white/10 rounded px-2 py-1"></select></div>
+                            <div class="flex flex-wrap gap-1.5">
+                                <label class="text-xs text-gray-400 block w-full">统计量</label>
+                                <label class="flex items-center gap-1 text-xs"><input type="checkbox" class="fec-agg-stat accent-neonPurple" value="mean" checked>均值</label>
+                                <label class="flex items-center gap-1 text-xs"><input type="checkbox" class="fec-agg-stat accent-neonPurple" value="max" checked>最大值</label>
+                                <label class="flex items-center gap-1 text-xs"><input type="checkbox" class="fec-agg-stat accent-neonPurple" value="std" checked>标准差</label>
+                                <label class="flex items-center gap-1 text-xs"><input type="checkbox" class="fec-agg-stat accent-neonPurple" value="skew" checked>偏度</label>
+                                <label class="flex items-center gap-1 text-xs"><input type="checkbox" class="fec-agg-stat accent-neonPurple" value="median">中位数</label>
+                                <label class="flex items-center gap-1 text-xs"><input type="checkbox" class="fec-agg-stat accent-neonPurple" value="count">计数</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rounded-lg bg-[#0b0e1f] p-2 space-y-1.5">
+                        <label class="flex items-center gap-2 text-sm cursor-pointer">
+                            <input type="checkbox" id="fecCombEnable" class="accent-neonPurple">
+                            <span class="font-medium">组合交叉特征</span>
+                        </label>
+                        <p class="text-xs text-gray-500 pl-5">对两个数值列进行四则运算，生成新特征列</p>
+                        <div class="flex flex-wrap gap-2 pl-5 items-end">
+                            <div><label class="text-xs text-gray-400 block">列A</label><select id="fecCombCol1" class="fec-col-num bg-[#111327] text-xs border border-white/10 rounded px-2 py-1"></select></div>
+                            <select id="fecCombOp" class="bg-[#111327] text-xs border border-white/10 rounded px-2 py-1">
+                                <option value="+">+</option><option value="-">-</option><option value="*">×</option><option value="/">÷</option>
+                            </select>
+                            <div><label class="text-xs text-gray-400 block">列B</label><select id="fecCombCol2" class="fec-col-num bg-[#111327] text-xs border border-white/10 rounded px-2 py-1"></select></div>
+                            <div><label class="text-xs text-gray-400 block">新列名</label><input id="fecCombName" type="text" placeholder="如 age_sibsp" class="bg-[#111327] text-xs border border-white/10 rounded px-2 py-1 w-28"></div>
+                        </div>
+                    </div>
+                    <div class="rounded-lg bg-[#0b0e1f] p-2 space-y-1.5">
+                        <label class="flex items-center gap-2 text-sm cursor-pointer">
+                            <input type="checkbox" id="fecTimeEnable" class="accent-neonPurple">
+                            <span class="font-medium">时序特征</span>
+                        </label>
+                        <p class="text-xs text-gray-500 pl-5">从时间列提取周期信息：年/月/日/星期/季度/周</p>
+                        <div class="flex flex-wrap gap-2 pl-5 items-end">
+                            <div><label class="text-xs text-gray-400 block">时间列</label><select id="fecTimeCol" class="fec-col bg-[#111327] text-xs border border-white/10 rounded px-2 py-1"></select></div>
+                            <div class="flex flex-wrap gap-1.5">
+                                <label class="text-xs text-gray-400 block w-full">提取项</label>
+                                <label class="flex items-center gap-1 text-xs"><input type="checkbox" class="fec-time-part accent-neonPurple" value="year">年</label>
+                                <label class="flex items-center gap-1 text-xs"><input type="checkbox" class="fec-time-part accent-neonPurple" value="month">月</label>
+                                <label class="flex items-center gap-1 text-xs"><input type="checkbox" class="fec-time-part accent-neonPurple" value="day">日</label>
+                                <label class="flex items-center gap-1 text-xs"><input type="checkbox" class="fec-time-part accent-neonPurple" value="weekday" checked>星期</label>
+                                <label class="flex items-center gap-1 text-xs"><input type="checkbox" class="fec-time-part accent-neonPurple" value="quarter">季度</label>
+                                <label class="flex items-center gap-1 text-xs"><input type="checkbox" class="fec-time-part accent-neonPurple" value="week">周</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rounded-lg bg-[#0b0e1f] p-2 space-y-1.5">
+                        <label class="flex items-center gap-2 text-sm cursor-pointer">
+                            <input type="checkbox" id="fecFreqEnable" class="accent-neonPurple">
+                            <span class="font-medium">频次与计数特征</span>
+                        </label>
+                        <p class="text-xs text-gray-500 pl-5">统计类别值全局出现次数，生成频次特征列</p>
+                        <div class="flex flex-wrap gap-2 pl-5 items-end">
+                            <div><label class="text-xs text-gray-400 block">类别列</label><select id="fecFreqCol" class="fec-col bg-[#111327] text-xs border border-white/10 rounded px-2 py-1"></select></div>
+                            <div><label class="text-xs text-gray-400 block">新列名（留空自动）</label><input id="fecFreqName" type="text" placeholder="如 Embarked_频次" class="bg-[#111327] text-xs border border-white/10 rounded px-2 py-1 w-28"></div>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="fecRunBtn" class="px-4 py-2 rounded-lg bg-gradient-to-r from-neonPurple to-neonPink font-bold hover:opacity-85"><i class="fa fa-magic"></i> 执行特征构造</button>
+                        <button id="fecDownloadBtn" class="px-4 py-2 rounded-lg border border-neonGreen/50 text-neonGreen hover:bg-neonGreen/10 hidden"><i class="fa fa-download"></i> 下载构造后数据</button>
+                    </div>
+                    <div class="rounded-lg bg-[#111327] p-3">
+                        <div id="fecToggle" class="flex items-center justify-between cursor-pointer select-none">
+                            <span class="text-sm font-semibold text-neonPurple flex items-center gap-2"><i class="fa fa-cubes"></i> 构造结果 <i id="fecChevron" class="fa fa-chevron-down text-xs opacity-60 transition-transform"></i></span>
+                            <span id="fecBadge" class="text-xs text-gray-500">暂无</span>
+                        </div>
+                        <div id="fecWrap" class="hidden mt-2">
+                            <div id="fecResult" class="text-gray-200 text-sm whitespace-pre-wrap max-h-x] overflow-auto scrollbar-thin">
+                                <div class="text-gray-500">勾选上方特征构造项并点击「执行特征构造」。</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-        <!-- ============ 数据集展示（独立模块，位于数据清洗模块正下方，仅清洗模块激活时显示） ============ -->
-        <div id="dsPanel" class="glass rounded-xl p-4 space-y-3">
-            <div class="flex justify-between items-center">
-                <h2 class="text-sm font-semibold flex items-center gap-2 text-neonBlue"><i class="fa fa-table"></i> 数据集展示</h2>
-                <span id="dsInfo" class="text-xs text-gray-400 truncate max-w-[200px]" title="当前数据集">未选择数据集</span>
+            <!-- ===== 数据变换与规范化（独立分区，位于特征工程与数据集切分之间） ===== -->
+            <div class="bg-[#0e1124] rounded-xl p-4 space-y-3 border border-neonOrange/20">
+                <div class="flex items-center gap-2 text-neonOrange text-sm font-semibold"><i class="fa fa-exchange"></i> 数据变换与规范化</div>
+                <p class="text-xs text-gray-500">对所选数值列进行变换（替换原列值），三类变换可自由勾选。</p>
+                <div class="rounded-lg bg-[#0b0e1f] p-2 space-y-1.5">
+                    <label class="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" id="ftStdEnable" class="accent-neonOrange" checked>
+                        <span class="font-medium">标准化（Standardization）</span>
+                    </label>
+                    <p class="text-xs text-gray-500 pl-5">(x − mean) / std，适用于线性模型、SVM、PCA</p>
+                </div>
+                <div class="rounded-lg bg-[#0b0e1f] p-2 space-y-1.5">
+                    <label class="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" id="ftMmxEnable" class="accent-neonOrange" checked>
+                        <span class="font-medium">归一化（MinMaxScaler）</span>
+                    </label>
+                    <p class="text-xs text-gray-500 pl-5">(x − min) / (max − min)，压缩到 [0,1]，适用于神经网络、距离计算（KNN）</p>
+                </div>
+                <div class="rounded-lg bg-[#0b0e1f] p-2 space-y-1.5">
+                    <label class="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" id="ftRobEnable" class="accent-neonOrange">
+                        <span class="font-medium">稳健缩放（RobustScaler）</span>
+                    </label>
+                    <p class="text-xs text-gray-500 pl-5">(x − median) / IQR，受异常值影响小</p>
+                </div>
+                <div class="rounded-lg bg-[#0b0e1f] p-2 space-y-1.5">
+                    <div class="text-sm font-medium">目标列（数值列多选）</div>
+                    <div id="ftCols" class="flex flex-wrap gap-1.5 pt-1">
+                        <span class="text-xs text-gray-500">上传数据集后自动填充数值列</span>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <button id="ftRunBtn" class="px-4 py-2 rounded-lg bg-gradient-to-r from-neonOrange to-neonPink font-bold hover:opacity-85"><i class="fa fa-random"></i> 执行变换</button>
+                    <button id="ftDownloadBtn" class="px-4 py-2 rounded-lg border border-neonGreen/50 text-neonGreen hover:bg-neonGreen/10 hidden"><i class="fa fa-download"></i> 下载变换后数据</button>
+                </div>
+                <div class="rounded-lg bg-[#111327] p-3">
+                    <div id="ftToggle" class="flex items-center justify-between cursor-pointer select-none">
+                        <span class="text-sm font-semibold text-neonOrange flex items-center gap-2"><i class="fa fa-line-chart"></i> 变换结果 <i id="ftChevron" class="fa fa-chevron-down text-xs opacity-60 transition-transform"></i></span>
+                        <span id="ftBadge" class="text-xs text-gray-500">暂无</span>
+                    </div>
+                    <div id="ftWrap" class="hidden mt-2">
+                        <div id="ftResult" class="text-gray-200 text-sm whitespace-pre-wrap max-h-x] overflow-auto scrollbar-thin">
+                            <div class="text-gray-500">勾选上方变换类型与目标列后点击「执行变换」。</div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div id="dsTable" class="overflow-auto max-h-[420px] scrollbar-thin text-xs text-gray-200 bg-[#111327] rounded-lg p-2">
-                <div class="text-gray-500 text-center py-5">上传数据集后在此展示数据表格</div>
+            <!-- ===== 特征工程 · 数据集切分 ===== -->
+            <div class="bg-[#0e1124] rounded-xl p-4 space-y-3 border border-neonBlue/20">
+                <div class="flex items-center gap-2 text-neonBlue text-sm font-semibold"><i class="fa fa-scissors"></i> 数据集切分</div>
+                <p class="text-xs text-gray-500">按比例将数据集切分为训练集 / 测试集（验证集比例填 0 则不切），切分后可分别下载。</p>
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="text-xs text-gray-400">测试集比例</label>
+                        <input id="feTestSize" type="number" min="0.05" max="0.8" step="0.05" value="0.2" class="w-full mt-1 bg-[#111327] border border-white/10 rounded px-2 py-1.5 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400">验证集比例（0=不切）</label>
+                        <input id="feValSize" type="number" min="0" max="0.8" step="0.05" value="0" class="w-full mt-1 bg-[#111327] border border-white/10 rounded px-2 py-1.5 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400">当前数据集</label>
+                        <div id="feSplitFileBadge" class="w-full mt-1 bg-[#111327] border border-white/10 rounded px-2 py-1.5 text-xs text-gray-400 truncate" title="当前数据集">未选择</div>
+                    </div>
+                </div>
+                <div class="flex gap-2 items-center">
+                    <button id="feSplitBtn" class="px-4 py-2 rounded-lg bg-gradient-to-r from-neonBlue to-neonPurple text-white text-sm font-medium hover:opacity-90">
+                        <i class="fa fa-cut"></i> 开始切分
+                    </button>
+                </div>
             </div>
         </div>
 
         <!-- ============ EDA 分析面板 ============ -->
-        <div id="panel-eda" class="glass rounded-xl p-4 panel-page hidden space-y-4 flex flex-col h-full">
+        <div id="panel-eda" class="glass rounded-xl p-4 panel-page space-y-4 flex flex-col h-full">
+            <!-- 三级导航：数据概览与探索 / EDA 按需绘图 -->
+            <div class="flex gap-1.5 bg-[#0b0e1f] rounded-lg p-1 border border-white/10">
+                <button class="eda-sub-tab tab-item active flex-1 py-1.5 text-sm rounded text-center transition-all" data-sub="overview">数据概览与探索</button>
+                <button class="eda-sub-tab tab-item flex-1 py-1.5 text-sm rounded text-center transition-all" data-sub="plot">EDA 按需绘图</button>
+            <button class="eda-sub-tab tab-item flex-1 py-1.5 text-sm rounded text-center transition-all" data-sub="clean">数据清洗</button>
+            </div>
+            <!-- ===== 数据概览与探索（数据质量报告） ===== -->
+            <div id="overviewCard" class="bg-[#111327] rounded-xl p-3 space-y-2">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-semibold flex items-center gap-2 text-neonPurple"><i class="fa fa-eye"></i> 数据概览与探索</h2>
+                    <span id="overviewFileBadge" class="text-xs px-2 py-1 rounded border border-neonPurple/40 text-neonPurple truncate max-w-x]" title="当前数据集">未选择数据集</span>
+                </div>
+                <p class="text-xs text-gray-500">一键输出数据质量报告：数据形状与列类型 → 数值/文本统计摘要 → 缺失与重复。</p>
+                <div class="flex gap-2">
+                    <button id="genOverviewBtn" class="px-4 py-2 rounded-lg bg-gradient-to-r from-neonPurple to-neonPink font-bold hover:opacity-85 whitespace-nowrap">
+                        <i class="fa fa-file-text-o"></i> 生成数据质量报告
+                    </button>
+                </div>
+                <div class="rounded-lg bg-[#0b0e1f] p-2">
+                    <div id="overviewToggle" class="flex items-center justify-between cursor-pointer select-none">
+                        <span class="text-sm font-semibold text-neonPurple flex items-center gap-2"><i class="fa fa-file-text-o"></i> 数据质量报告 <i id="overviewChevron" class="fa fa-chevron-down text-xs opacity-60 transition-transform"></i></span>
+                        <span id="overviewBadge" class="text-xs text-gray-500">未生成</span>
+                    </div>
+                    <div id="overviewResultWrap" class="hidden mt-2">
+                        <div id="overviewResult" class="text-xs text-gray-300 space-y-2">
+                            <div class="text-gray-500">上传数据集后点击「生成数据质量报告」，展示数据概览与探索结果。</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="edaPlotCard" class="bg-[#111327] rounded-xl p-3 space-y-2 mt-2 hidden">
             <div class="flex justify-between items-center">
                 <h2 class="text-lg font-semibold flex items-center gap-2 text-neonBlue"><i class="fa fa-bar-chart"></i> EDA 按需绘图</h2>
                 <span id="edaFileBadge" class="text-xs px-2 py-1 rounded border border-neonPurple/40 text-neonPurple truncate max-w-[220px]" title="当前数据集">未选择数据集</span>
@@ -411,6 +566,7 @@
                     <div id="edaReport" class="text-xs text-gray-300 whitespace-pre-wrap max-h-[360px] overflow-auto scrollbar-thin">
                         <div class="text-gray-500">上传数据集后，点击「生成特征分析报告」，由大模型基于特征统计自动分析特征重要性、特征相关性，并给出特征工程建议（修改/提取哪些特征可提升模型预测准确性）。</div>
                     </div>
+            <div id="edaDiagnosis"></div>
                 </div>
             </div>
             <div class="space-y-2">
@@ -441,6 +597,65 @@
                     <i class="fa fa-file-archive-o"></i> 打包下载图表
                 </button>
             </div>
+            </div>
+            <!-- ===== 数据清洗（智能清洗工作台） ===== -->
+            <div id="cleanSubCard" class="bg-[#111327] rounded-xl p-3 space-y-2 hidden">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-semibold flex items-center gap-2 text-neonGreen"><i class="fa fa-magic"></i> 数据清洗</h2>
+                    <span id="cleanSubFileBadge" class="text-xs px-2 py-1 rounded border border-neonGreen/40 text-neonGreen truncate max-w-[200px]" title="当前数据集">未选择数据集</span>
+                </div>
+                <p class="text-xs text-gray-500">后端确定性执行：类型纠正 → 缺失值处理 → 重复值处理，选项自由组合。</p>
+                <div class="rounded-lg bg-[#0b0e1f] p-2 space-y-1.5">
+                    <label class="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" id="cleanTypeFix" class="accent-neonGreen" checked>
+                        <span class="font-medium">类型纠正</span>
+                    </label>
+                    <p class="text-xs text-gray-500 pl-5">数字字符串→数值 · 时间戳→datetime · 分类文本→category；转换失败置为缺失(NaN)</p>
+                </div>
+                <div class="rounded-lg bg-[#0b0e1f] p-2 space-y-1.5">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-sm font-medium whitespace-nowrap">缺失值处理</span>
+                        <select id="cleanMissingStrategy" class="bg-[#111327] text-xs border border-white/10 rounded px-2 py-1 flex-1 max-w-[260px]">
+                            <option value="none">不处理</option>
+                            <option value="delete">删除高缺失列（缺失率 &gt; 阈值）</option>
+                            <option value="const">常数填充（数值0 / 分类「未知」）</option>
+                            <option value="stat" selected>统计量填充（均值·中位数·众数）</option>
+                            <option value="interpolate">插值法（线性插值 / 前后向填充）</option>
+                        </select>
+                    </div>
+                    <div id="cleanThreshRow" class="flex items-center gap-2 pl-1 hidden">
+                        <label class="text-xs text-gray-400 whitespace-nowrap">缺失率阈值</label>
+                        <input type="number" id="cleanMissingThreshold" value="0.6" step="0.05" min="0" max="1" class="w-20 bg-[#111327] text-xs border border-white/10 rounded px-2 py-1">
+                    </div>
+                </div>
+                <div class="rounded-lg bg-[#0b0e1f] p-2 space-y-1.5">
+                    <label class="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" id="cleanDupFix" class="accent-neonGreen" checked>
+                        <span class="font-medium">重复值处理</span>
+                    </label>
+                    <p class="text-xs text-gray-500 pl-5">识别完全重复的行并直接删除</p>
+                </div>
+                <div class="flex gap-2 items-center">
+                    <button id="cleanRunBtn" class="px-4 py-2 rounded-lg bg-gradient-to-r from-neonGreen to-neonBlue text-white text-sm font-medium hover:opacity-90">
+                        <i class="fa fa-play"></i> 执行清洗
+                    </button>
+                    <button id="cleanSubDownloadBtn" class="hidden px-3 py-1.5 rounded-lg border border-neonGreen/40 text-neonGreen text-xs hover:bg-neonGreen/10">
+                        <i class="fa fa-download"></i> 下载清洗结果
+                    </button>
+                </div>
+                <div class="rounded-lg bg-[#0b0e1f] p-2">
+                    <div id="cleanSubToggle" class="flex items-center justify-between cursor-pointer select-none">
+                        <span class="text-sm font-semibold text-neonGreen flex items-center gap-2"><i class="fa fa-tasks"></i> 清洗结果 <i id="cleanSubChevron" class="fa fa-chevron-down text-xs opacity-60 transition-transform"></i></span>
+                        <span id="cleanSubBadge" class="text-xs text-gray-500">未执行</span>
+                    </div>
+                    <div id="cleanSubResultWrap" class="hidden mt-2">
+                        <div id="cleanSubResult" class="text-xs text-gray-300 space-y-2">
+                            <div class="text-gray-500">选择上方选项后点击「执行清洗」。</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
         <!-- ============ 模型训练面板 ============ -->
@@ -986,13 +1201,6 @@ if (tableDataTab) tableDataTab.onclick = () => switchDataType('table');
 if (imageDataTab) imageDataTab.onclick = () => switchDataType('image');
 
 /* 数据清洗面板 */
-const runCleanBtn = document.getElementById('runCleanBtn');
-const cleanResult = document.getElementById('cleanResult');
-const cleanResultWrap = document.getElementById('cleanResultWrap');
-const cleanResultToggle = document.getElementById('cleanResultToggle');
-const cleanResultChevron = document.getElementById('cleanResultChevron');
-const cleanResultBadge = document.getElementById('cleanResultBadge');
-const downloadCleanBtn = document.getElementById('downloadCleanBtn');
 const cleanFileBadge = document.getElementById('cleanFileBadge');
 /* EDA 面板 */
 const edaQuery = document.getElementById('edaQuery');
@@ -1037,7 +1245,6 @@ const refreshModelsBtn = document.getElementById('refreshModelsBtn');
 const trainModels = document.getElementById('trainModels');
 const trainFileBadge = document.getElementById('trainFileBadge');
 /* 预测面板 */
-let predictionChartInstance = null;
 let edaChartInstances = [];
 const predictFileBadge = document.getElementById('predictFileBadge');
 
@@ -1052,7 +1259,6 @@ let reportTextCache = "";
 let lastCharts = [];
 let historyEntries = [];
 let imgScale = 1;
-let lastCleanedPath = "";
 let lastEdaFiles = [];
 let lossChart = null;
 
@@ -1217,7 +1423,6 @@ async function uploadFiles(fileList) {
                 if (d.sample) currentSample = d.sample;
                 addLog(`[UPLOAD] 上传成功: ${d.filename || f.name}（${d.rows != null ? d.rows + " 行" : "行数未知"}，字段 ${(d.cols || []).length} 个）`);
                 showUploadToast(d.filename || f.name);
-                if (typeof renderCleanOps === 'function') renderCleanOps();
             } else {
                 addLog(`[UPLOAD] 上传失败: ${res.msg || "未知错误"}`);
                 alert("上传失败：" + (res.msg || "未知错误"));
@@ -1233,12 +1438,16 @@ async function uploadFiles(fileList) {
         if (showDatasetBtn) showDatasetBtn.classList.remove("hidden");
         const name = currentFilePath.split(/[\\/]/).pop();
         if (cleanFileBadge) cleanFileBadge.innerText = name;
+        if (feSplitFileBadge) feSplitFileBadge.innerText = name;
         if (edaFileBadge) edaFileBadge.innerText = name;
+if (overviewFileBadge) overviewFileBadge.innerText = name;
+        if (cleanSubFileBadge) cleanSubFileBadge.innerText = name;
         if (trainFileBadge) trainFileBadge.innerText = name;
         if (predictFileBadge) predictFileBadge.innerText = name;
         addLog("[UPLOAD] 数据集就绪，可在各功能面板中操作");
-        renderDataset();
         renderEdaFeatSel();
+        if (typeof fecRenderCols === 'function') fecRenderCols();
+        if (typeof ftRenderCols === 'function') ftRenderCols();
     }
 }
 const tableUploadBtn = document.getElementById('tableUploadBtn');
@@ -1834,42 +2043,197 @@ function renderFileList() {
                 if (bd) bd.innerText = "未选择数据集";
             });
         }
-        renderDataset();
     });
 }
 /* 预览数据集（在聊天中显示表格） */
-function renderDataset() {
-    const table = document.getElementById('dsTable');
-    const info = document.getElementById('dsInfo');
-    if (!table || !info) return;
-    if (!currentCols.length) {
-        table.innerHTML = '<div class="text-gray-500 text-center py-8">上传数据集后在此展示数据表格</div>';
-        info.innerText = "未上传数据集";
-        return;
-    }
-    const rows = currentSample || [];
-    info.innerText = currentCols.length + " 列 × " + (rows.length ? "前 " + rows.length + " 行" : "0 行");
-    let html = '<table class="w-full border-collapse"><thead><tr class="bg-white/10">';
-    html += currentCols.map(cc => `<th class="px-2 py-1 border border-white/10 text-left whitespace-nowrap">${escapeHtml(cc)}</th>`).join("");
-    html += '</tr></thead><tbody>';
-    if (rows.length) {
-        rows.forEach(r => {
-            html += '<tr>' + currentCols.map(cc => `<td class="px-2 py-1 border border-white/10 whitespace-nowrap">${escapeHtml(r[cc])}</td>`).join("") + '</tr>';
-        });
-    } else {
-        html += '<tr><td colspan="' + currentCols.length + '" class="text-center text-gray-500 py-4">（无预览数据）</td></tr>';
-    }
-    html += '</tbody></table>';
-    table.innerHTML = html;
+/* ============ 数据变换与规范化（/fe_transform） ============ */
+const FT_API = `${API_BASE}/fe_transform`;
+const ftRunBtn = document.getElementById('ftRunBtn');
+const ftDownloadBtn = document.getElementById('ftDownloadBtn');
+const ftToggle = document.getElementById('ftToggle');
+const ftChevron = document.getElementById('ftChevron');
+const ftWrap = document.getElementById('ftWrap');
+const ftResult = document.getElementById('ftResult');
+const ftBadge = document.getElementById('ftBadge');
+let ftOpen = false;
+function toggleFt(open) {
+    ftOpen = open;
+    if (ftWrap) ftWrap.classList.toggle('hidden', !ftOpen);
+    if (ftChevron) ftChevron.className = ftOpen ? 'fa fa-chevron-up text-xs opacity-60' : 'fa fa-chevron-down text-xs opacity-60';
 }
-showDatasetBtn.onclick = () => {
-    if (!currentCols.length) { addChatMessage('assistant', "暂无数据集，请先上传。"); return; }
-    let txt = "【数据集预览】字段：" + currentCols.map(escapeHtml).join("、") +
-        (currentSample && currentSample.length ? `（前 ${currentSample.length} 行）` : "");
-    if (currentSample && currentSample.length) {
-        txt += "\n" + currentSample.map(r => currentCols.map(c => r[c] ?? "").join(" | ")).join("\n");
+if (ftToggle) ftToggle.onclick = () => toggleFt(!ftOpen);
+function ftRenderCols() {
+    const box = document.getElementById('ftCols');
+    if (!box) return;
+    const num = (currentNumericCols.length ? currentNumericCols : currentCols);
+    if (!num.length) { box.innerHTML = '<span class="text-xs text-gray-500">请先上传数据集</span>'; return; }
+    box.innerHTML = num.map(c =>
+        `<label class="flex items-center gap-1 text-xs text-gray-300 px-2 py-1 rounded bg-white/5 border border-white/10 cursor-pointer hover:bg-neonOrange/10">
+            <input type="checkbox" value="${escapeHtml(c)}" class="accent-neonOrange ft-col-cb" checked> ${escapeHtml(c)}
+        </label>`).join('');
+}
+if (ftRunBtn) ftRunBtn.onclick = async () => {
+    if (!currentFilePath) { alert("请先上传数据集"); return; }
+    const cols = [...document.querySelectorAll('#ftCols .ft-col-cb:checked')].map(c => c.value);
+    if (!cols.length) { alert("请至少选择一个目标列"); return; }
+    const ops = [];
+    if (document.getElementById('ftStdEnable') && document.getElementById('ftStdEnable').checked) ops.push({ type: 'standardize', columns: cols });
+    if (document.getElementById('ftMmxEnable') && document.getElementById('ftMmxEnable').checked) ops.push({ type: 'minmax', columns: cols });
+    if (document.getElementById('ftRobEnable') && document.getElementById('ftRobEnable').checked) ops.push({ type: 'robust', columns: cols });
+    if (!ops.length) { alert("请至少选择一种变换类型"); return; }
+    if (ftDownloadBtn) ftDownloadBtn.classList.add('hidden');
+    ftResult.innerHTML = '<div class="text-neonOrange"><i class="fa fa-spinner fa-spin"></i> 正在执行变换...</div>';
+    toggleFt(true);
+    if (ftBadge) ftBadge.innerText = '执行中';
+    try {
+        const params = new URLSearchParams({ file_path: currentFilePath, ops_json: JSON.stringify(ops) });
+        const resp = await fetch(`${FT_API}?${params.toString()}`, { method: 'POST' });
+        const json = await resp.json();
+        if (json.code !== 0) {
+            ftResult.innerHTML = '<div class="text-rose-400">❌ ' + escapeHtml(json.msg || '执行失败') + '</div>';
+            if (ftBadge) ftBadge.innerText = '失败';
+            return;
+        }
+        renderFt(json.data);
+    } catch (e) {
+        console.error(e);
+        ftResult.innerHTML = '<div class="text-rose-400">❌ 请求异常，请确认后端已启动</div>';
+        if (ftBadge) ftBadge.innerText = '失败';
     }
-    addChatMessage('assistant', txt);
+};
+function renderFt(d) {
+    const before = d.before || {}, after = d.after || {};
+    const f2 = v => (v === null || v === undefined || v !== v) ? '—' : Number(v).toFixed(4);
+    let h = '';
+    h += '<div class="grid grid-cols-3 gap-2">';
+    h += '<div class="rounded bg-neonOrange/10 border border-neonOrange/30 p-2"><div class="text-gray-400">行数</div><div class="font-semibold text-neonOrange">' + (before.rows ?? '—') + ' → ' + (after.rows ?? '—') + '</div></div>';
+    h += '<div class="rounded bg-neonBlue/10 border border-neonBlue/30 p-2"><div class="text-gray-400">列数</div><div class="font-semibold text-neonBlue">' + (before.cols ?? '—') + ' → ' + (after.cols ?? '—') + '</div></div>';
+    h += '<div class="rounded bg-neonPurple/10 border border-neonPurple/30 p-2"><div class="text-gray-400">缺失值</div><div class="font-semibold text-neonPurple">' + (before.missing_total ?? '—') + ' → ' + (after.missing_total ?? '—') + '</div></div>';
+    h += '</div>';
+    const ch = d.changed || [];
+    if (ch.length) {
+        h += '<div class="border border-neonOrange/30 rounded p-2"><div class="font-semibold text-neonOrange mb-1">⚖️ 变换明细（均值 / 标准差 / 最小 / 最大）</div>';
+        ch.forEach(c => {
+            h += '<div class="mb-1"><span class="text-neonOrange">' + escapeHtml(c.col) + ' · ' + escapeHtml(c.transform) + '</span><div class="text-xs text-gray-400">前 [' + f2(c.before.mean) + ' / ' + f2(c.before.std) + ' / ' + f2(c.before.min) + ' / ' + f2(c.before.max) + '] → 后 [' + f2(c.after.mean) + ' / ' + f2(c.after.std) + ' / ' + f2(c.after.min) + ' / ' + f2(c.after.max) + ']</div></div>';
+        });
+        h += '</div>';
+    }
+    if (d.summary) h += '<div class="text-gray-400 text-xs">' + escapeHtml(d.summary) + '</div>';
+    ftResult.innerHTML = h;
+    if (ftBadge) ftBadge.innerText = '已执行';
+    if (d.clean_path && ftDownloadBtn) {
+        ftDownloadBtn.setAttribute('data-path', d.clean_path);
+        ftDownloadBtn.classList.remove('hidden');
+    }
+    // 数据引用切换到变换后文件：右上角徽标全部更新
+    if (d.clean_path && typeof currentFilePath !== 'undefined') {
+        currentFilePath = d.clean_path;
+        const cname = d.clean_path.split(/[\\/]/).pop();
+        [cleanFileBadge, edaFileBadge, overviewFileBadge, cleanSubFileBadge, feSplitFileBadge, trainFileBadge, predictFileBadge].forEach(b => { if (b) b.innerText = cname; });
+        addLog("[FT] 数据引用已切换到变换后文件: " + cname + "，可前往「数据概览与探索」查看");
+    }
+}
+if (ftDownloadBtn) ftDownloadBtn.onclick = () => {
+    const p = ftDownloadBtn.getAttribute('data-path');
+    if (p) downloadCleanedPath({ getAttribute: k => (k === 'data-path' ? p : null) });
+};
+
+/* ============ 特征构造工作台（/fe_construct） ============ */
+const FE_CONSTRUCT_API = `${API_BASE}/fe_construct`;
+const fecRunBtn = document.getElementById('fecRunBtn');
+const fecDownloadBtn = document.getElementById('fecDownloadBtn');
+const fecToggle = document.getElementById('fecToggle');
+const fecChevron = document.getElementById('fecChevron');
+const fecWrap = document.getElementById('fecWrap');
+const fecResult = document.getElementById('fecResult');
+const fecBadge = document.getElementById('fecBadge');
+let fecOpen = false;
+function toggleFec(open) {
+    fecOpen = open;
+    if (fecWrap) fecWrap.classList.toggle('hidden', !fecOpen);
+    if (fecChevron) fecChevron.className = fecOpen ? 'fa fa-chevron-up text-xs opacity-60' : 'fa fa-chevron-down text-xs opacity-60';
+}
+if (fecToggle) fecToggle.onclick = () => toggleFec(!fecOpen);
+function fecRenderCols() {
+    const all = currentCols.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+    const num = (currentNumericCols.length ? currentNumericCols : currentCols).map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+    const fill = (sel, html) => {
+        if (!sel) return;
+        const keep = sel.value;
+        sel.innerHTML = html;
+        if (keep && [...sel.options].some(o => o.value === keep)) sel.value = keep;
+    };
+    document.querySelectorAll('.fec-col').forEach(s => fill(s, all));
+    document.querySelectorAll('.fec-col-num').forEach(s => fill(s, num));
+}
+if (fecRunBtn) fecRunBtn.onclick = async () => {
+    if (!currentFilePath) { alert("请先上传数据集"); return; }
+    const ops = [];
+    if (document.getElementById('fecAggEnable') && document.getElementById('fecAggEnable').checked) {
+        const stats = [...document.querySelectorAll('.fec-agg-stat:checked')].map(c => c.value);
+        if (stats.length) ops.push({ type: 'agg', group_col: document.getElementById('fecAggGroup').value, value_col: document.getElementById('fecAggValue').value, stats });
+    }
+    if (document.getElementById('fecCombEnable') && document.getElementById('fecCombEnable').checked) {
+        ops.push({ type: 'combine', col1: document.getElementById('fecCombCol1').value, operator: document.getElementById('fecCombOp').value, col2: document.getElementById('fecCombCol2').value, new_name: (document.getElementById('fecCombName').value || '').trim() });
+    }
+    if (document.getElementById('fecTimeEnable') && document.getElementById('fecTimeEnable').checked) {
+        const parts = [...document.querySelectorAll('.fec-time-part:checked')].map(c => c.value);
+        if (parts.length) ops.push({ type: 'time', time_col: document.getElementById('fecTimeCol').value, parts });
+    }
+    if (document.getElementById('fecFreqEnable') && document.getElementById('fecFreqEnable').checked) {
+        ops.push({ type: 'freq', cat_col: document.getElementById('fecFreqCol').value, new_name: (document.getElementById('fecFreqName').value || '').trim() });
+    }
+    if (!ops.length) { alert("请至少启用一项特征构造"); return; }
+    if (fecDownloadBtn) fecDownloadBtn.classList.add('hidden');
+    fecResult.innerHTML = '<div class="text-neonPurple"><i class="fa fa-spinner fa-spin"></i> 正在执行特征构造...</div>';
+    toggleFec(true);
+    if (fecBadge) fecBadge.innerText = '执行中';
+    try {
+        const params = new URLSearchParams({ file_path: currentFilePath, ops_json: JSON.stringify(ops) });
+        const resp = await fetch(`${FE_CONSTRUCT_API}?${params.toString()}`, { method: 'POST' });
+        const json = await resp.json();
+        if (json.code !== 0) {
+            fecResult.innerHTML = '<div class="text-rose-400">❌ ' + escapeHtml(json.msg || '执行失败') + '</div>';
+            if (fecBadge) fecBadge.innerText = '失败';
+            return;
+        }
+        renderFec(json.data);
+    } catch (e) {
+        console.error(e);
+        fecResult.innerHTML = '<div class="text-rose-400">❌ 请求异常，请确认后端已启动</div>';
+        if (fecBadge) fecBadge.innerText = '失败';
+    }
+};
+function renderFec(d) {
+    const before = d.before || {}, after = d.after || {};
+    let h = '';
+    h += '<div class="grid grid-cols-3 gap-2">';
+    h += '<div class="rounded bg-neonPurple/10 border border-neonPurple/30 p-2"><div class="text-gray-400">行数</div><div class="font-semibold text-neonPurple">' + (before.rows ?? '—') + ' → ' + (after.rows ?? '—') + '</div></div>';
+    h += '<div class="rounded bg-neonBlue/10 border border-neonBlue/30 p-2"><div class="text-gray-400">列数</div><div class="font-semibold text-neonBlue">' + (before.cols ?? '—') + ' → ' + (after.cols ?? '—') + ' <span class="text-neonGreen">(+' + ((after.cols ?? 0) - (before.cols ?? 0)) + ')</span></div></div>';
+    h += '<div class="rounded bg-neonOrange/10 border border-neonOrange/30 p-2"><div class="text-gray-400">缺失值</div><div class="font-semibold text-neonOrange">' + (before.missing_total ?? '—') + ' → ' + (after.missing_total ?? '—') + '</div></div>';
+    h += '</div>';
+    h += '<div class="border border-neonPurple/30 rounded p-2"><div class="font-semibold text-neonPurple mb-1">🧬 新增特征</div>';
+    (d.added_cols || []).forEach(c => { h += '<div class="text-neonGreen">+ ' + escapeHtml(c) + '</div>'; });
+    if (!(d.added_cols || []).length) h += '<div class="text-gray-500">（无）</div>';
+    h += '</div>';
+    if (d.summary) h += '<div class="text-gray-400 text-xs">' + escapeHtml(d.summary) + '</div>';
+    fecResult.innerHTML = h;
+    if (fecBadge) fecBadge.innerText = '已执行';
+    if (d.clean_path && fecDownloadBtn) {
+        fecDownloadBtn.setAttribute('data-path', d.clean_path);
+        fecDownloadBtn.classList.remove('hidden');
+    }
+    // 数据引用切换到特征构造后文件：右上角徽标全部更新
+    if (d.clean_path && typeof currentFilePath !== 'undefined') {
+        currentFilePath = d.clean_path;
+        const cname = d.clean_path.split(/[\\/]/).pop();
+        [cleanFileBadge, edaFileBadge, overviewFileBadge, cleanSubFileBadge, feSplitFileBadge, trainFileBadge, predictFileBadge].forEach(b => { if (b) b.innerText = cname; });
+        addLog("[FE] 数据引用已切换到特征构造后文件: " + cname + "，可前往「数据概览与探索」查看");
+    }
+}
+if (fecDownloadBtn) fecDownloadBtn.onclick = () => {
+    const p = fecDownloadBtn.getAttribute('data-path');
+    if (p) downloadCleanedPath({ getAttribute: k => (k === 'data-path' ? p : null) });
 };
 
 /* ============ 功能导航切换 ============ */
@@ -1882,231 +2246,50 @@ document.querySelectorAll('.nav-func').forEach(btn => {
             const el = document.getElementById('panel-' + p);
             if (el) el.classList.toggle('hidden', p !== panel);
         });
-        const dsEl = document.getElementById('dsPanel');
-        if (dsEl) dsEl.classList.toggle('hidden', panel !== 'clean');
     };
 });
 
-/* ============ 数据清洗（选项式选择 → /clean_fast 白名单 pandas 确定性执行） ============ */
-const CLEAN_FAST_API = `${API_BASE}/clean_fast`;   // POST 勾选的清洗操作 → 确定性执行（不依赖大模型）
-
-/* 可选清洗操作定义 */
-const CLEAN_OP_DEFS = [
-    { key: "drop_duplicates", name: "删除重复行", desc: "整表去重，保留首次出现的行" },
-    { key: "drop_missing", name: "删除缺失行", desc: "删除包含缺失值的行" },
-    { key: "fill_missing", name: "填充缺失值", method: true, cols: "auto-num", colsLabel: "目标列" },
-    { key: "strip", name: "去除首尾空格", cols: "auto-text", colsLabel: "目标列" },
-    { key: "to_numeric", name: "转为数值", cols: "multi", colsLabel: "选择列（至少1个）", required: true },
-    { key: "to_datetime", name: "转为日期", cols: "multi", colsLabel: "选择列（至少1个）", required: true },
-    { key: "drop_columns", name: "删除列", cols: "multi", colsLabel: "选择列（至少1个）", required: true },
-    { key: "keep_columns", name: "保留列", cols: "multi", colsLabel: "选择列（至少1个）", required: true },
-    { key: "rename", name: "重命名列", rename: true },
-    { key: "replace", name: "替换值", replace: true },
-    { key: "col_math", name: "数值运算", math: true, desc: "两数值列四则运算，结果追加为新列" },
-];
-const CLEAN_METHODS = [
-    ["mean", "均值"], ["median", "中位数"], ["mode", "众数"], ["zero", "填充0"],
-    ["ffill", "前向填充"], ["bfill", "后向填充"], ["constant", "常量"],
-];
-
-/* 渲染清洗操作选择区（列选项随数据集动态刷新） */
-function renderCleanOps() {
-    const box = document.getElementById('cleanOps');
-    if (!box) return;
-    if (!currentCols.length) {
-        box.innerHTML = '<div class="text-gray-500 text-xs text-center py-4">上传数据集后在此选择清洗操作</div>';
-        return;
-    }
-    const colsOptsAll = currentCols.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
-    const autoOptsNum = '<option value="">（全部数值列，自动）</option>' + colsOptsAll;
-    const autoOptsText = '<option value="">（全部文本列，自动）</option>' + colsOptsAll;
-    const numOpts = currentNumericCols.length
-        ? currentNumericCols.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("")
-        : colsOptsAll;
-    let html = "";
-    CLEAN_OP_DEFS.forEach(def => {
-        const oid = "cop_" + def.key;
-        html += `<div class="flex flex-wrap items-center gap-1.5 rounded-lg bg-[#0b0e1f] px-2.5 py-2 text-xs w-fit">
-            <label class="flex items-center gap-1.5 cursor-pointer select-none shrink-0 whitespace-nowrap">
-                <input type="checkbox" id="${oid}" class="cop-chk accent-neonPink" value="${def.key}">
-                <span class="text-gray-200 font-medium">${def.name}</span>
-            </label>`;
-        if (def.method) {
-            html += `<select id="${oid}_method" class="cop-method shrink min-w-0 bg-[#12142b] border border-neonBlue/30 rounded px-1.5 py-1 text-gray-200 outline-none">` +
-                CLEAN_METHODS.map(m => `<option value="${m[0]}">${m[1]}</option>`).join("") + `</select>`;
-        }
-        if (def.cols) {
-            const isAuto = def.cols === "auto-num" || def.cols === "auto-text";
-            let opts = def.cols === "auto-num" ? autoOptsNum : (def.cols === "auto-text" ? autoOptsText : colsOptsAll);
-            if (!isAuto) opts = '<option value="" disabled selected>选择列</option>' + opts;
-            html += `<label class="text-gray-400 whitespace-nowrap shrink-0">${def.colsLabel}</label>
-                <select id="${oid}_cols" class="cop-cols shrink min-w-0 max-w-[9rem] bg-[#12142b] border border-neonBlue/30 rounded px-1.5 py-1 text-gray-200 outline-none">${opts}</select>`;
-        }
-        if (def.rename) {
-            html += `<select id="${oid}_old" class="cop-old shrink min-w-0 max-w-[9rem] bg-[#12142b] border border-neonBlue/30 rounded px-1.5 py-1 text-gray-200 outline-none">${colsOptsAll}</select>
-                <span class="text-gray-400 whitespace-nowrap shrink-0">改名为</span>
-                <input id="${oid}_new" type="text" class="cop-new shrink-0 bg-[#12142b] border border-neonBlue/30 rounded px-1.5 py-1 text-gray-200 outline-none w-28" placeholder="新列名">`;
-        }
-        if (def.replace) {
-            html += `<select id="${oid}_col" class="cop-repcol shrink min-w-0 max-w-[9rem] bg-[#12142b] border border-neonBlue/30 rounded px-1.5 py-1 text-gray-200 outline-none">${colsOptsAll}</select>
-                <input id="${oid}_old" type="text" class="cop-repold shrink-0 bg-[#12142b] border border-neonBlue/30 rounded px-1.5 py-1 text-gray-200 outline-none w-24" placeholder="旧值">
-                <span class="text-gray-400 whitespace-nowrap shrink-0">→</span>
-                <input id="${oid}_new" type="text" class="cop-repnew shrink-0 bg-[#12142b] border border-neonBlue/30 rounded px-1.5 py-1 text-gray-200 outline-none w-24" placeholder="新值">`;
-        }
-        if (def.math) {
-            html += `<select id="${oid}_c1" class="cop-mc1 shrink min-w-0 max-w-[8rem] bg-[#12142b] border border-neonBlue/30 rounded px-1.5 py-1 text-gray-200 outline-none">${numOpts}</select>
-                <select id="${oid}_op" class="cop-mop shrink-0 bg-[#12142b] border border-neonBlue/30 rounded px-1.5 py-1 text-gray-200 outline-none">
-                    <option value="+">＋</option><option value="-">－</option><option value="*">×</option><option value="/">÷</option>
-                </select>
-                <select id="${oid}_c2" class="cop-mc2 shrink min-w-0 max-w-[8rem] bg-[#12142b] border border-neonBlue/30 rounded px-1.5 py-1 text-gray-200 outline-none">${numOpts}</select>
-                <span class="text-gray-400 whitespace-nowrap shrink-0">→ 新列</span>
-                <input id="${oid}_new" type="text" class="cop-mnew shrink-0 bg-[#12142b] border border-neonBlue/30 rounded px-1.5 py-1 text-gray-200 outline-none w-28" placeholder="新列名">`;
-        }
-        html += `<span class="text-gray-500 max-w-[8rem] truncate italic">${escapeHtml(def.desc || "")}</span></div>`;
-    });
-    box.innerHTML = html;
-}
-
-/* 收集勾选的清洗操作 → 白名单 ops 数组 */
-function collectCleanOps() {
-    const ops = [];
-    document.querySelectorAll('#cleanOps .cop-chk:checked').forEach(chk => {
-        const key = chk.value;
-        const def = CLEAN_OP_DEFS.find(d => d.key === key);
-        const op = { op: key };
-        if (!def) { ops.push(op); return; }
-        if (def.method) {
-            const m = document.getElementById('cop_' + key + '_method');
-            op.method = m ? m.value : "mean";
-        }
-        if (def.cols) {
-            const sel = document.getElementById('cop_' + key + '_cols');
-            const v = sel ? sel.value : "";
-            if (v !== "") op.columns = [v];
-            if (def.required && !v) throw new Error(def.name + "：请选择一列");
-        }
-        if (def.rename) {
-            const old = document.getElementById('cop_' + key + '_old').value;
-            const neu = document.getElementById('cop_' + key + '_new').value.trim();
-            if (!neu) throw new Error("重命名列：请填写新列名");
-            op.mapping = { [old]: neu };
-        }
-        if (def.replace) {
-            const col = document.getElementById('cop_' + key + '_col').value;
-            const old = document.getElementById('cop_' + key + '_old').value;
-            const neu = document.getElementById('cop_' + key + '_new').value;
-            if (old === "" || neu === "") throw new Error("替换值：请填写旧值和新值");
-            op.column = col; op.old = old; op.new = neu;
-        }
-        if (def.math) {
-            const c1 = document.getElementById('cop_' + key + '_c1').value;
-            const opt = document.getElementById('cop_' + key + '_op').value;
-            const c2 = document.getElementById('cop_' + key + '_c2').value;
-            const neu = document.getElementById('cop_' + key + '_new').value.trim();
-            if (!c1 || !c2) throw new Error("数值运算：请选择两个数值列");
-            if (c1 === c2) throw new Error("数值运算：两个列不能相同");
-            if (!neu) throw new Error("数值运算：请填写新列名");
-            op.col1 = c1; op.operator = opt; op.col2 = c2; op.new_name = neu;
-        }
-        ops.push(op);
-    });
-    return ops;
-}
-
-/* 清洗结果折叠：默认合上，点击展开 */
-if (cleanResultToggle) cleanResultToggle.onclick = () => {
-    const isHidden = cleanResultWrap.classList.toggle('hidden');
-    if (cleanResultChevron) cleanResultChevron.style.transform = isHidden ? '' : 'rotate(180deg)';
-};
-
-let cleanToastTimer = null;
-function showCleanToast(msg, type) {
-    const t = document.getElementById('cleanToast');
-    if (!t) return;
-    t.classList.remove('hidden');
-    if (type === 'run') {
-        t.className = 'px-3 py-2 rounded-lg border text-xs font-medium transition-opacity duration-300 border-neonBlue/50 bg-neonBlue/10 text-neonBlue';
-        t.innerHTML = '<i class="fa fa-spinner fa-spin"></i> ' + msg;
-        if (cleanToastTimer) { clearTimeout(cleanToastTimer); cleanToastTimer = null; }
-    } else {
-        const ok = type === 'ok';
-        t.className = 'px-3 py-2 rounded-lg border text-xs font-medium transition-opacity duration-300 ' + (ok ? 'border-neonGreen/50 bg-neonGreen/10 text-neonGreen' : 'border-rose-500/50 bg-rose-500/10 text-rose-400');
-        t.innerHTML = (ok ? '<i class="fa fa-check-circle"></i> ' : '<i class="fa fa-times-circle"></i> ') + msg;
-        t.style.opacity = '1';
-        if (cleanToastTimer) clearTimeout(cleanToastTimer);
-        cleanToastTimer = setTimeout(() => {
-            t.style.opacity = '0';
-            setTimeout(() => { t.classList.add('hidden'); t.style.opacity = '1'; }, 400);
-        }, 2200);
-    }
-}
-runCleanBtn.onclick = async () => {
+/* ============ 特征工程 · 数据集切分（复用 /train_split，val=0 两切分） ============ */
+const feSplitFileBadge = document.getElementById('feSplitFileBadge');
+const feSplitBtn = document.getElementById('feSplitBtn');
+const feTestSize = document.getElementById('feTestSize');
+const feValSize = document.getElementById('feValSize');
+if (feSplitBtn) feSplitBtn.onclick = async () => {
     if (!currentFilePath) { alert("请先上传数据集"); return; }
-    let ops;
-    try { ops = collectCleanOps(); } catch (e) { alert(e.message); return; }
-    if (!ops.length) { alert("请先勾选至少一项清洗内容"); return; }
-    cleanResult.innerHTML = '<div class="text-neonBlue"><i class="fa fa-spinner fa-spin"></i> 正在执行清洗（pandas 确定性执行）...</div>';
-    showCleanToast('数据清洗中，请稍候...', 'run');
+    const test_size = parseFloat(feTestSize.value) || 0.2;
+    const val_size = parseFloat(feValSize.value) || 0;
+    feSplitBtn.disabled = true;
     try {
-        const qs = new URLSearchParams({ file_path: currentFilePath, ops_json: JSON.stringify(ops), model_name: currentModel });
-        const resp = await fetch(`${CLEAN_FAST_API}?${qs.toString()}`, { method: "POST" });
+        const qs = new URLSearchParams({ file_path: currentFilePath, test_size: test_size, val_size: val_size });
+        const resp = await fetch(`${TRAIN_SPLIT_API}?${qs.toString()}`, { method: "POST" });
         const json = await resp.json();
         if (json.code === 0) {
             const d = json.data || {};
-            let html = '<div class="text-gray-200">' + escapeHtml(d.summary || "清洗完成。") + '</div>';
-            if (d.diff) {
-                html += '<div class="mt-2 text-xs text-gray-400">行数 ' + d.diff.rows_before + ' → ' + d.diff.rows_after +
-                    '（减少 ' + d.diff.rows_removed + '）｜缺失 ' + d.diff.missing_before + ' → ' + d.diff.missing_after +
-                    '｜重复 ' + d.diff.duplicated_before + ' → ' + d.diff.duplicated_after + '</div>';
-            }
-            cleanResult.innerHTML = html;
-            if (cleanResultBadge) cleanResultBadge.textContent = "✅ 清洗完成（点击展开）";
-            showCleanToast('数据清洗完成', 'ok');
-            if (cleanResultWrap) cleanResultWrap.classList.add('hidden');
-            if (cleanResultChevron) cleanResultChevron.style.transform = '';
-            if (d.cleaned_file_path) {
-                lastCleanedPath = d.cleaned_file_path;
-                downloadCleanBtn.classList.remove('hidden');
-            }
-            addChatMessage('assistant', "【清洗完成】" + (d.summary || ""));
-            addLog("[CLEAN] 清洗成功");
+            // 切分产物自动加载到模型训练面板
+            trainUpTrainPath = d.train_path;
+            trainUpValPath = d.val_path || "";
+            trainUpTestPath = d.test_path;
+            const bn = p => decodeURIComponent(String(p).split(/[\\/]/).pop());
+            const upd = (id, path) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.innerHTML = path ? '<span class="text-neonGreen"><i class="fa fa-check"></i> ' + escapeHtml(bn(path)) + '（已自动加载）</span>' : '<span class="text-xs text-gray-500">未选择</span>';
+            };
+            upd('trainUpTrainName', d.train_path);
+            upd('trainUpValName', d.val_path);
+            upd('trainUpTestName', d.test_path);
+            const line = d.val_rows > 0
+                ? `总样本 ${d.total_rows} 行 → 训练 ${d.train_rows} / 验证 ${d.val_rows} / 测试 ${d.test_rows}（${(1 - d.test_size - d.val_size) * 100}% / ${d.val_size * 100}% / ${d.test_size * 100}%）`
+                : `总样本 ${d.total_rows} 行 → 训练 ${d.train_rows} / 测试 ${d.test_rows}（${(1 - d.test_size) * 100}% / ${d.test_size * 100}%）`;
+            addLog("[特征工程] 数据集切分完成: " + line + "，已自动加载到模型训练");
         } else {
-            cleanResult.innerHTML = '<div class="text-rose-400">❌ ' + escapeHtml(json.msg || "清洗失败") + '</div>';
-            if (cleanResultBadge) cleanResultBadge.textContent = "❌ 清洗失败（点击展开）";
-            showCleanToast('数据清洗失败', 'err');
-            if (cleanResultWrap) cleanResultWrap.classList.remove('hidden');
-            if (cleanResultChevron) cleanResultChevron.style.transform = 'rotate(180deg)';
+            alert("切分失败: " + (json.msg || "未知错误"));
         }
     } catch (err) {
         console.error(err);
-        cleanResult.innerHTML = '<div class="text-rose-400">❌ 请求异常，请确认后端已启动</div>';
-        showCleanToast('数据清洗失败（请求异常）', 'err');
-    }
-};
-downloadCleanBtn.onclick = async () => {
-    if (!lastCleanedPath) return;
-    try {
-        const resp = await fetch(`${DOWNLOAD_CLEANED_API}?file_path=${encodeURIComponent(lastCleanedPath)}`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = lastCleanedPath.split(/[\\/]/).pop();
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-        /* 下载完成后自动清除缓存文件 */
-        try {
-            await fetch(`${CLEAN_DELETE_API}?file_path=${encodeURIComponent(lastCleanedPath)}`, { method: "POST" });
-            addLog("[CLEAN] 下载完成，已自动清除缓存文件");
-        } catch (e2) { console.error("清除缓存失败", e2); }
-        lastCleanedPath = "";
-        downloadCleanBtn.classList.add('hidden');
-    } catch (err) {
-        console.error(err);
-        alert("下载失败：" + err.message);
+        alert("切分请求异常，请确认后端已启动");
+    } finally {
+        feSplitBtn.disabled = false;
     }
 };
 
@@ -2125,6 +2308,266 @@ downloadEdaReportBtn.onclick = () => {
     URL.revokeObjectURL(url);
     addLog("[EDA] 特征分析报告已下载(.md)");
 };
+/* ============ EDA 模块三级导航：数据概览与探索 / EDA 按需绘图 ============ */
+document.querySelectorAll('.eda-sub-tab').forEach(btn => {
+    btn.onclick = () => {
+        document.querySelectorAll('.eda-sub-tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const sub = btn.dataset.sub;
+        const oc = document.getElementById('overviewCard');
+        const pc = document.getElementById('edaPlotCard');
+        const cc = document.getElementById('cleanSubCard');
+        if (oc) oc.classList.toggle('hidden', sub !== 'overview');
+        if (pc) pc.classList.toggle('hidden', sub !== 'plot');
+        if (cc) cc.classList.toggle('hidden', sub !== 'clean');
+    };
+});
+
+/* ============ 数据清洗工作台：类型纠正 + 缺失值处理 + 重复值处理 ============ */
+const CLEAN_RUN_API = `${API_BASE}/clean_run`;
+const cleanSubFileBadge = document.getElementById('cleanSubFileBadge');
+const cleanRunBtn = document.getElementById('cleanRunBtn');
+const cleanSubDownloadBtn = document.getElementById('cleanSubDownloadBtn');
+const cleanSubToggle = document.getElementById('cleanSubToggle');
+const cleanSubChevron = document.getElementById('cleanSubChevron');
+const cleanSubResultWrap = document.getElementById('cleanSubResultWrap');
+const cleanSubResult = document.getElementById('cleanSubResult');
+const cleanSubBadge = document.getElementById('cleanSubBadge');
+const cleanTypeFix = document.getElementById('cleanTypeFix');
+const cleanMissingStrategy = document.getElementById('cleanMissingStrategy');
+const cleanMissingThreshold = document.getElementById('cleanMissingThreshold');
+const cleanDupFix = document.getElementById('cleanDupFix');
+const cleanThreshRow = document.getElementById('cleanThreshRow');
+let cleanSubOpen = false;
+function toggleCleanSub(open) {
+    cleanSubOpen = open;
+    if (cleanSubResultWrap) cleanSubResultWrap.classList.toggle('hidden', !cleanSubOpen);
+    if (cleanSubChevron) cleanSubChevron.className = cleanSubOpen ? 'fa fa-chevron-up text-xs opacity-60' : 'fa fa-chevron-down text-xs opacity-60';
+}
+if (cleanSubToggle) cleanSubToggle.onclick = () => toggleCleanSub(!cleanSubOpen);
+if (cleanMissingStrategy) cleanMissingStrategy.onchange = () => {
+    if (cleanThreshRow) cleanThreshRow.classList.toggle('hidden', cleanMissingStrategy.value !== 'delete');
+};
+if (cleanRunBtn) cleanRunBtn.onclick = async () => {
+    if (!currentFilePath) { alert("请先上传数据集"); return; }
+    if (cleanSubDownloadBtn) cleanSubDownloadBtn.classList.add('hidden');
+    cleanSubResult.innerHTML = '<div class="text-neonGreen"><i class="fa fa-spinner fa-spin"></i> 正在执行清洗...</div>';
+    toggleCleanSub(true);
+    if (cleanSubBadge) cleanSubBadge.innerText = '执行中';
+    try {
+        const params = new URLSearchParams({
+            file_path: currentFilePath,
+            type_fix: cleanTypeFix.checked ? 'true' : 'false',
+            missing_strategy: cleanMissingStrategy.value,
+            missing_threshold: cleanMissingThreshold.value || '0.6',
+            dup_fix: cleanDupFix.checked ? 'true' : 'false',
+        });
+        const resp = await fetch(`${CLEAN_RUN_API}?${params.toString()}`, { method: 'POST' });
+        const json = await resp.json();
+        if (json.code !== 0) {
+            cleanSubResult.innerHTML = '<div class="text-rose-400">❌ ' + escapeHtml(json.msg || '清洗失败') + '</div>';
+            if (cleanSubBadge) cleanSubBadge.innerText = '失败';
+            return;
+        }
+        renderCleanSub(json.data);
+    } catch (e) {
+        console.error(e);
+        cleanSubResult.innerHTML = '<div class="text-rose-400">❌ 请求异常，请确认后端已启动</div>';
+        if (cleanSubBadge) cleanSubBadge.innerText = '失败';
+    }
+};
+function renderCleanSub(d) {
+    const diff = d.diff || {};
+    const fmt = v => (v === null || v === undefined) ? '—' : String(v);
+    let h = '';
+    h += '<div class="grid grid-cols-3 gap-2">';
+    h += '<div class="rounded bg-neonBlue/10 border border-neonBlue/30 p-2"><div class="text-gray-400">行数</div><div class="font-semibold text-neonBlue">' + diff.rows_before + ' → ' + diff.rows_after + (diff.rows_removed > 0 ? ' <span class="text-neonGreen">(删' + diff.rows_removed + ')</span>' : '') + '</div></div>';
+    h += '<div class="rounded bg-neonPurple/10 border border-neonPurple/30 p-2"><div class="text-gray-400">缺失值</div><div class="font-semibold text-neonPurple">' + diff.missing_before + ' → ' + diff.missing_after + '</div></div>';
+    h += '<div class="rounded bg-neonOrange/10 border border-neonOrange/30 p-2"><div class="text-gray-400">重复行</div><div class="font-semibold text-neonOrange">' + diff.duplicated_before + ' → ' + diff.duplicated_after + '</div></div>';
+    h += '</div>';
+    const tc = d.type_changes || [];
+    if (tc.length) {
+        h += '<div class="border border-neonGreen/30 rounded p-2"><div class="font-semibold text-neonGreen mb-1">🔧 类型纠正</div><table class="w-full"><thead><tr class="text-gray-400"><th class="text-left">列</th><th class="text-left">原类型</th><th class="text-left">新类型</th><th class="text-left">失败转NaN</th></tr></thead><tbody>';
+        tc.forEach(c => { h += '<tr><td>' + escapeHtml(c.col) + '</td><td>' + escapeHtml(c.from) + '</td><td class="text-neonGreen">' + escapeHtml(c.to) + '</td><td>' + c.failed_to_nan + '</td></tr>'; });
+        h += '</tbody></table></div>';
+    }
+    const m = d.missing || {};
+    if ((m.filled || []).length || (m.deleted_columns || []).length) {
+        h += '<div class="border border-neonOrange/30 rounded p-2"><div class="font-semibold text-neonOrange mb-1">🩹 缺失值处理</div>';
+        (m.deleted_columns || []).forEach(c => { h += '<div class="text-rose-400">✂️ 删除高缺失列 ' + escapeHtml(c.col) + '（缺失率 ' + Math.round(c.missing_ratio * 100) + '%）</div>'; });
+        (m.filled || []).forEach(c => { h += '<div><span class="text-gray-400">' + escapeHtml(c.col) + '</span> · ' + escapeHtml(c.method) + ' 填充 ' + c.filled + ' 个，剩余 ' + c.remaining + '</div>'; });
+        h += '</div>';
+    }
+    if (d.dup_removed > 0) h += '<div class="text-neonGreen">🔁 已删除完全重复行 ' + d.dup_removed + ' 行</div>';
+    const ec = d.eda_check || {};
+    if (ec.verdict) {
+        h += '<div class="border border-neonBlue/30 rounded p-2"><div class="font-semibold text-neonBlue mb-1">🩺 EDA 复查</div><div>' + escapeHtml(ec.verdict) + '</div>';
+        (ec.still_needed || []).forEach(s => { h += '<div class="text-neonOrange">• ' + escapeHtml(s) + '</div>'; });
+        h += '</div>';
+    }
+    cleanSubResult.innerHTML = h;
+    if (cleanSubBadge) cleanSubBadge.innerText = '已执行';
+    if (d.clean_path && cleanSubDownloadBtn) {
+        cleanSubDownloadBtn.setAttribute('data-path', d.clean_path);
+        cleanSubDownloadBtn.classList.remove('hidden');
+    }
+    // 数据引用切换到清洗后文件：右上角徽标全部更新，概览/绘图/训练/预测均读清洗结果
+    if (d.clean_path && typeof currentFilePath !== 'undefined') {
+        currentFilePath = d.clean_path;
+        const cname = d.clean_path.split(/[\\/]/).pop();
+        const badges = [cleanFileBadge, edaFileBadge, overviewFileBadge, cleanSubFileBadge, trainFileBadge, predictFileBadge];
+        badges.forEach(b => { if (b) b.innerText = cname; });
+        addLog("[CLEAN] 数据引用已切换到清洗后文件: " + cname + "，可前往「数据概览与探索」查看清洗结果");
+    }
+}
+if (cleanSubDownloadBtn) cleanSubDownloadBtn.onclick = () => {
+    const p = cleanSubDownloadBtn.getAttribute('data-path');
+    if (p) downloadCleanedPath({ getAttribute: k => (k === 'data-path' ? p : null) });
+};
+
+/* ============ 数据概览与探索：数据质量报告 ============ */
+const overviewFileBadge = document.getElementById('overviewFileBadge');
+const OVERVIEW_API = `${API_BASE}/data_overview`;
+const overviewToggle = document.getElementById('overviewToggle');
+const overviewChevron = document.getElementById('overviewChevron');
+const overviewResultWrap = document.getElementById('overviewResultWrap');
+const overviewBadge = document.getElementById('overviewBadge');
+let overviewOpen = false;
+function toggleOverview(open) {
+    overviewOpen = open;
+    if (overviewResultWrap) overviewResultWrap.classList.toggle('hidden', !overviewOpen);
+    if (overviewChevron) overviewChevron.className = overviewOpen ? 'fa fa-chevron-up text-xs opacity-60' : 'fa fa-chevron-down text-xs opacity-60';
+}
+if (overviewToggle) overviewToggle.onclick = () => toggleOverview(!overviewOpen);
+const genOverviewBtn = document.getElementById('genOverviewBtn');
+if (genOverviewBtn) {
+    genOverviewBtn.onclick = async () => {
+        if (!currentFilePath) { alert("请先上传数据集"); return; }
+        const box = document.getElementById('overviewResult');
+        box.innerHTML = '<div class="text-neonBlue"><i class="fa fa-spinner fa-spin"></i> 正在生成数据质量报告...</div>';
+        try {
+            const resp = await fetch(`${OVERVIEW_API}?file_path=${encodeURIComponent(currentFilePath)}`, { method: "POST" });
+            const json = await resp.json();
+            if (json.code !== 0) { box.innerHTML = '<div class="text-rose-400">❌ ' + escapeHtml(json.msg || "生成失败") + '</div>'; return; }
+            const d = json.data;
+            const fmt = v => (v === null || v === undefined) ? '—' : String(v);
+            let h = '';
+            // 1. 概览
+            h += '<div class="flex flex-wrap gap-2">';
+            h += '<span class="px-2 py-1 rounded bg-neonBlue/10 border border-neonBlue/30">📏 行数 ' + d.shape.rows + '</span>';
+            h += '<span class="px-2 py-1 rounded bg-neonPurple/10 border border-neonPurple/30">🧩 列数 ' + d.shape.cols + '</span>';
+            h += '<span class="px-2 py-1 rounded ' + (d.duplicates.count > 0 ? 'bg-neonOrange/10 border border-neonOrange/40 text-neonOrange' : 'bg-neonGreen/10 border border-neonGreen/30') + '">🔁 重复行 ' + d.duplicates.count + '（' + d.duplicates.ratio + '%）</span>';
+            h += '</div>';
+            // 2. 列名与类型
+            h += '<div class="rounded-lg bg-[#0b0e1f] p-2"><div class="text-neonPurple font-semibold mb-1">📋 列名与数据类型</div><table class="w-full text-left"><thead><tr class="text-gray-500"><th class="py-1">列名</th><th class="py-1">类型</th><th class="py-1">dtype</th></tr></thead><tbody>';
+            d.columns.forEach(c => {
+                const color = c.type === 'int' ? 'text-neonGreen' : c.type === 'float' ? 'text-neonBlue' : c.type === 'datetime' ? 'text-neonOrange' : 'text-neonPurple';
+                h += '<tr class="border-b border-white/5"><td class="py-0.5">' + escapeHtml(c.name) + '</td><td class="py-0.5 ' + color + '">' + escapeHtml(c.type) + '</td><td class="py-0.5 text-gray-500">' + escapeHtml(c.dtype) + '</td></tr>';
+            });
+            h += '</tbody></table></div>';
+            // 3. 数值列统计摘要
+            if (d.numeric_summary.length) {
+                h += '<div class="rounded-lg bg-[#0b0e1f] p-2"><div class="text-neonPurple font-semibold mb-1">📊 数值列统计摘要（均值/标准差/分位数）</div><div class="overflow-auto"><table class="w-full text-left whitespace-nowrap"><thead><tr class="text-gray-500"><th class="py-1 pr-2">列</th><th class="py-1 pr-2">均值</th><th class="py-1 pr-2">标准差</th><th class="py-1 pr-2">min</th><th class="py-1 pr-2">25%</th><th class="py-1 pr-2">50%</th><th class="py-1 pr-2">75%</th><th class="py-1 pr-2">max</th></tr></thead><tbody>';
+                d.numeric_summary.forEach(c => {
+                    h += '<tr class="border-b border-white/5"><td class="py-0.5 pr-2">' + escapeHtml(c.column) + '</td><td class="py-0.5 pr-2">' + fmt(c.mean) + '</td><td class="py-0.5 pr-2">' + fmt(c.std) + '</td><td class="py-0.5 pr-2">' + fmt(c.min) + '</td><td class="py-0.5 pr-2">' + fmt(c.q25) + '</td><td class="py-0.5 pr-2">' + fmt(c.q50) + '</td><td class="py-0.5 pr-2">' + fmt(c.q75) + '</td><td class="py-0.5 pr-2">' + fmt(c.max) + '</td></tr>';
+                });
+                h += '</tbody></table></div></div>';
+            }
+            // 4. 文本列统计摘要
+            if (d.text_summary.length) {
+                h += '<div class="rounded-lg bg-[#0b0e1f] p-2"><div class="text-neonPurple font-semibold mb-1">🔤 文本列统计摘要（唯一值/众数）</div><table class="w-full text-left"><thead><tr class="text-gray-500"><th class="py-1">列</th><th class="py-1">唯一值数</th><th class="py-1">众数</th></tr></thead><tbody>';
+                d.text_summary.forEach(c => {
+                    h += '<tr class="border-b border-white/5"><td class="py-0.5">' + escapeHtml(c.column) + '</td><td class="py-0.5">' + c.nunique + '</td><td class="py-0.5">' + escapeHtml(String(c.mode)) + '（' + c.mode_count + ' 次）</td></tr>';
+                });
+                h += '</tbody></table></div>';
+            }
+            // 5. 缺失统计
+            h += '<div class="rounded-lg bg-[#0b0e1f] p-2"><div class="text-neonPurple font-semibold mb-1">⚠️ 缺失值统计</div><table class="w-full text-left"><thead><tr class="text-gray-500"><th class="py-1">列</th><th class="py-1">缺失数</th><th class="py-1">缺失比例</th></tr></thead><tbody>';
+            d.missing.forEach(c => {
+                const warn = c.ratio >= 30 ? 'text-neonOrange' : c.ratio > 0 ? 'text-neonPink' : 'text-gray-500';
+                h += '<tr class="border-b border-white/5"><td class="py-0.5">' + escapeHtml(c.column) + '</td><td class="py-0.5">' + c.missing + '</td><td class="py-0.5 ' + warn + '">' + c.ratio + '%</td></tr>';
+            });
+            h += '</tbody></table></div>';
+            box.innerHTML = h;
+            toggleOverview(true);
+            if (overviewBadge) overviewBadge.innerText = '已生成';
+            addLog("[OVERVIEW] 数据质量报告生成完成");
+        } catch (err) {
+            console.error(err);
+            box.innerHTML = '<div class="text-rose-400">❌ 请求异常，请确认后端已启动</div>';
+        }
+    };
+}
+
+/* ============ EDA 诊断→处方→一键应用 + 智能预处理（诊断—治疗闭环） ============ */
+const PREPROCESS_API = `${API_BASE}/preprocess_run`;
+async function runSmartPreprocess(targetEl, filePath) {
+    if (!filePath) { alert("请先上传数据集"); return; }
+    targetEl.insertAdjacentHTML('beforeend',
+        '<div class="mt-2 text-neonBlue"><i class="fa fa-spinner fa-spin"></i> 智能预处理进行中：初步EDA → 对数变换 → 再次EDA验证 → Box-Cox/分箱 ...</div>');
+    try {
+        const qs = new URLSearchParams({ file_path: filePath });
+        const resp = await fetch(`${PREPROCESS_API}?${qs.toString()}`, { method: "POST" });
+        const json = await resp.json();
+        if (json.code !== 0) {
+            targetEl.insertAdjacentHTML('beforeend', '<div class="text-rose-400 mt-2">❌ ' + escapeHtml(json.msg || "预处理失败") + '</div>');
+            return;
+        }
+        const d = json.data || {};
+        let h = '<div class="mt-2 bg-[#0b0e1f] rounded-lg p-3 border border-pink-500/30">';
+        h += '<div class="text-xs text-pink-400 mb-1">🧬 智能预处理流程（初步EDA → 预处理A → 再次EDA → 预处理B → 最终建模数据集）</div>';
+        h += '<pre class="text-xs text-gray-300 whitespace-pre-wrap">' + escapeHtml((d.steps || []).join('\n')) + '</pre>';
+        if (d.summary) h += '<div class="mt-2 text-xs text-neonGreen">变换方案：' + escapeHtml(d.summary) + '</div>';
+        if (d.cleaned_file_path) {
+            h += '<div class="mt-2"><button onclick="downloadCleanedPath(this)" data-path="' + escapeHtml(d.cleaned_file_path) + '" class="px-3 py-1.5 rounded-lg border border-neonGreen/50 text-neonGreen hover:bg-neonGreen/10 text-xs">📥 下载最终建模数据集</button></div>';
+        }
+        h += '</div>';
+        targetEl.insertAdjacentHTML('beforeend', h);
+        addLog("[PREPROCESS] 智能预处理完成");
+    } catch (err) {
+        console.error(err);
+        targetEl.insertAdjacentHTML('beforeend', '<div class="text-rose-400 mt-2">❌ 请求异常，请确认后端已启动</div>');
+    }
+}
+function downloadCleanedPath(btn) {
+    const p = btn.getAttribute('data-path');
+    if (!p) return;
+    fetch(`${DOWNLOAD_CLEANED_API}?file_path=${encodeURIComponent(p)}`)
+        .then(r => r.ok ? r.blob() : Promise.reject(new Error('HTTP ' + r.status)))
+        .then(blob => {
+            const url = URL.createObjectURL(blob); const a = document.createElement('a');
+            a.href = url; a.download = p.split(/[\\/]/).pop(); document.body.appendChild(a); a.click(); a.remove();
+        })
+        .catch(() => alert('下载失败'));
+}
+function renderEdaDiagnosis(diag) {
+    const box = document.getElementById('edaDiagnosis');
+    if (!box) return;
+    if (!diag) { box.innerHTML = ''; return; }
+    const hasIssue = diag.quality_issues && diag.quality_issues.length;
+    let html = '<div class="mt-3 bg-[#0b0e1f] rounded-lg p-3 border border-neonBlue/30">';
+    html += '<div class="text-sm font-semibold text-neonBlue flex items-center gap-2"><i class="fa fa-stethoscope"></i> 智能诊断与处方</div>';
+    html += '<div class="mt-1 text-xs ' + (hasIssue ? 'text-neonOrange' : 'text-neonGreen') + '">' + escapeHtml(diag.verdict || '') + '</div>';
+    if (hasIssue) {
+        html += '<ul class="mt-2 text-xs text-gray-300 space-y-1">';
+        diag.quality_issues.forEach(it => {
+            html += '<li><span class="text-pink-400">●</span> ' + escapeHtml(it.detail) + ' <span class="text-neonPurple">→ ' + escapeHtml(it.action) + '</span></li>';
+        });
+        html += '</ul>';
+    }
+    if (diag.columns && diag.columns.length) {
+        html += '<table class="mt-2 w-full text-xs text-gray-300 border-collapse">';
+        html += '<thead><tr class="text-gray-500 border-b border-white/10"><th class="py-1 text-left">列</th><th class="py-1 text-left">偏度</th><th class="py-1 text-left">分布</th><th class="py-1 text-left">离群占比</th><th class="py-1 text-left">缺失%</th><th class="py-1 text-left">处方</th></tr></thead><tbody>';
+        diag.columns.forEach(c => {
+            const lv = c.skew_level === '近似正态' ? 'text-neonGreen' : 'text-neonOrange';
+            html += '<tr class="border-b border-white/5"><td class="py-1">' + escapeHtml(c.column) + '</td><td class="py-1">' + escapeHtml(String(c.skew)) + '</td><td class="py-1 ' + lv + '">' + escapeHtml(c.skew_level) + '</td><td class="py-1">' + escapeHtml(String(c.outlier_ratio)) + '</td><td class="py-1">' + escapeHtml(String(c.missing_ratio)) + '</td><td class="py-1 text-neonPurple">' + escapeHtml(c.suggestion) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+    }
+    html += '<div class="mt-2"><button onclick="runSmartPreprocess(document.getElementById(\'edaDiagnosis\'), currentFilePath)" class="px-3 py-1.5 rounded-lg border border-neonPink/60 text-neonPink hover:bg-neonPink/15 text-xs"><i class="fa fa-magic"></i> 一键应用预处理建议</button></div>';
+    html += '</div>';
+    box.innerHTML = html;
+}
 genEdaReportBtn.onclick = async () => {
     if (!currentFilePath) { alert("请先在左侧上传数据集"); return; }
     genEdaReportBtn.disabled = true;
@@ -2137,6 +2580,7 @@ genEdaReportBtn.onclick = async () => {
         if (json.code === 0) {
             lastEdaReport = json.data.report || "";
             edaReport.innerHTML = '<pre class="whitespace-pre-wrap font-sans text-xs text-gray-200">' + escapeHtml(lastEdaReport) + '</pre>';
+            renderEdaDiagnosis(json.data.diagnosis || null);
             if (downloadEdaReportBtn) downloadEdaReportBtn.classList.remove('hidden');
             toggleEdaReport(false);
         } else {

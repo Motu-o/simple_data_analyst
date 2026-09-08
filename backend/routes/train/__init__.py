@@ -321,21 +321,28 @@ async def train_split(
     except Exception as e:
         return {"code": -1, "msg": str(e)}
     ts = min(max(float(test_size), 0.05), 0.8)
-    vs = min(max(float(val_size), 0.05), 0.8)
-    if ts + vs > 0.9:
+    vs = min(max(float(val_size), 0.0), 0.8)  # 允许 0：不切验证集（两切分）
+    if vs > 0 and ts + vs > 0.9:
         vs = max(0.05, round(0.9 - ts, 2))
     base = os.path.splitext(os.path.basename(file_path))[0]
     train_path = os.path.join(split_folder, f"{base}_train.csv")
     val_path = os.path.join(split_folder, f"{base}_val.csv")
     test_path = os.path.join(split_folder, f"{base}_test.csv")
     try:
-        train_val_df, test_df = train_test_split(df, test_size=ts, random_state=42)
-        val_ratio = vs / (1 - ts) if (1 - ts) > 0 else 0.15
-        train_df, val_df = train_test_split(train_val_df, test_size=val_ratio, random_state=42)
+        if vs > 0:
+            train_val_df, test_df = train_test_split(df, test_size=ts, random_state=42)
+            val_ratio = vs / (1 - ts) if (1 - ts) > 0 else 0.15
+            train_df, val_df = train_test_split(train_val_df, test_size=val_ratio, random_state=42)
+        else:
+            train_df, test_df = train_test_split(df, test_size=ts, random_state=42)
+            val_df = pd.DataFrame()
     except Exception as e:
         return {"code": -1, "msg": f"切分失败: {str(e)}"}
     train_df.to_csv(train_path, index=False, encoding="utf-8-sig")
-    val_df.to_csv(val_path, index=False, encoding="utf-8-sig")
+    if vs > 0:
+        val_df.to_csv(val_path, index=False, encoding="utf-8-sig")
+    else:
+        val_path = ""
     test_df.to_csv(test_path, index=False, encoding="utf-8-sig")
     return {
         "code": 0,
@@ -343,7 +350,7 @@ async def train_split(
         "data": {
             "total_rows": len(df),
             "train_rows": len(train_df),
-            "val_rows": len(val_df),
+            "val_rows": len(val_df) if vs > 0 else 0,
             "test_rows": len(test_df),
             "test_size": ts,
             "val_size": vs,

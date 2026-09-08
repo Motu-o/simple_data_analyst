@@ -432,6 +432,43 @@ def _make_diff(before: Dict, after: Dict) -> Dict:
         "duplicated_after": after["duplicated_rows"],
     }
 
+def _eda_recheck(before_df: pd.DataFrame, after_df: pd.DataFrame) -> Dict:
+    """清洗后 EDA 复查（治疗 → 再验证）：对比清洗前后偏度/异常群组/缺失，
+    给出是否达标结论与仍需处理清单，与 EDA 诊断闭环。"""
+    from routes.preprocess import diagnose_column
+
+    def _summ(dff: pd.DataFrame) -> Dict:
+        num = [str(c) for c in dff.select_dtypes(include="number").columns]
+        sk, out = [], []
+        for c in num:
+            d = diagnose_column(dff[c], c)
+            sk.append((c, d["skew"]))
+            out.append((c, d["outlier_ratio"]))
+        return {
+            "bad_skew": [c for c, s in sk if abs(s) > 1],
+            "skew_cols": {c: round(float(s), 3) for c, s in sk},
+            "high_out": [c for c, o in out if o > 0.1],
+            "outlier_cols": {c: round(float(o), 3) for c, o in out},
+            "missing_total": int(dff.isna().sum().sum()),
+            "num_cols": len(num),
+        }
+
+    b, a = _summ(before_df), _summ(after_df)
+    still = []
+    if a["bad_skew"]:
+        still.append(f"仍有偏态列（{'、'.join(a['bad_skew'])}），建议对数/Box-Cox/分箱变换")
+    if a["high_out"]:
+        still.append(f"仍有异常群组（{'、'.join(a['high_out'])}），建议变换后复查离群占比")
+    if a["missing_total"] > 0:
+        still.append(f"仍有缺失 {a['missing_total']} 个，建议继续填充或删除")
+    ok = len(still) == 0
+    return {
+        "before": b,
+        "after": a,
+        "verdict": "清洗后数据质量达标，可进入建模" if ok else "清洗完成，但仍有数据质量问题，建议继续处理",
+        "still_needed": still,
+    }
+
 @app.post("/clean_dataset")
 async def clean_dataset(
     file_path: str = Query(),
@@ -610,6 +647,11 @@ async def clean_dataset(
 
     # 5. 清洗前后对比（真实统计）
     diff = _make_diff(before_report, after_report)
+    # 5.5 清洗后 EDA 复查（治疗 → 再验证，与 EDA 诊断闭环）
+    try:
+        eda_check = _eda_recheck(df, df_cleaned)
+    except Exception as e:
+        eda_check = {"verdict": f"EDA 复查失败：{e}", "before": None, "after": None, "still_needed": []}
 
     # 6. 确定性总结（严格基于已执行的操作与真实统计，不依赖模型）
     plan_ops = plan.get("ops") if isinstance(plan, dict) else None
@@ -632,6 +674,7 @@ async def clean_dataset(
             "before": before_report,
             "after": after_report,
             "diff": diff,
+            "eda_check": eda_check,
             "cleaned_file_path": clean_path,
             "cleaned_filename": clean_name,
             "plan": plan,
@@ -689,6 +732,11 @@ async def clean_fast(
 
     # 5. 清洗前后对比（真实统计）
     diff = _make_diff(before_report, after_report)
+    # 5.5 清洗后 EDA 复查（治疗 → 再验证，与 EDA 诊断闭环）
+    try:
+        eda_check = _eda_recheck(df, df_cleaned)
+    except Exception as e:
+        eda_check = {"verdict": f"EDA 复查失败：{e}", "before": None, "after": None, "still_needed": []}
 
     # 6. 模型写清洗总结（严格基于真实统计）
     summary_prompt = f"""
@@ -709,6 +757,7 @@ async def clean_fast(
             "before": before_report,
             "after": after_report,
             "diff": diff,
+            "eda_check": eda_check,
             "cleaned_file_path": clean_path,
             "cleaned_filename": clean_name,
             "plan": ops,
@@ -740,3 +789,434 @@ async def delete_cleaned(file_path: str = Query()):
         return {"code": 0, "msg": "缓存已清除", "data": {"deleted": True}}
     except Exception as e:
         return {"code": -1, "msg": f"删除缓存失败: {str(e)}"}
+# ================= 智能清洗工作台 /clean_run =================
+# 三大能力（全部由后端确定性执行，前端只传选项）：
+#   1. 类型纠正：数字字符串→数值、时间戳→datetime、分类文本→category；转换失败置 NaN
+#   2. 缺失值处理：删除高缺失列 / 常数填充 / 统计量填充 / 插值填充
+#   3. 重复值处理：删除完全重复行
+# 结果含 清洗前后质量对比 + 类型变化 + 删除列 + 重复行 + EDA 复查 + 下载文件
+
+def _json_safe(obj):
+    """递归清洗非有限浮点，保证 JSON 可序列化"""
+    if isinstance(obj, float):
+        import math
+        return None if not math.isfinite(obj) else round(obj, 6)
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
+def _col_kind(s: pd.Series, col: str) -> str:
+    """判断列类型倾向：numeric / datetime / category / text"""
+    if s.dtype.kind in "ifu":  # int/float/uint
+        return "numeric"
+    if s.dtype == "datetime64[ns]":
+        return "datetime"
+    if s.dtype.name.startswith("category"):
+        return "category"
+    non_null = s.dropna()
+    if len(non_null) == 0:
+        return "text"
+    lowered = str(col).lower()
+    # 时间戳：列名含时间词 或 值匹配常见日期格式
+    if any(k in lowered for k in ("time", "date", "timestamp", "datetime", "时间", "日期")):
+        parsed = pd.to_datetime(non_null.astype(str), errors="coerce")
+        if parsed.notna().mean() >= 0.8:
+            return "datetime"
+    # 数字字符串
+    conv = pd.to_numeric(non_null.astype(str).str.replace(",", ""), errors="coerce")
+    if len(conv) > 0 and conv.notna().mean() >= 0.8:
+        return "numeric"
+    # 分类文本：唯一值比例低
+    if len(non_null) > 0 and non_null.nunique() / len(non_null) < 0.5:
+        return "category"
+    return "text"
+
+
+def _type_fix(df: pd.DataFrame) -> Dict:
+    """类型纠正。返回类型变化清单。转换失败的值由 coerce 置 NaN。"""
+    changes = []
+    for col in df.columns:
+        s = df[col]
+        if s.dtype.name.startswith("category"):
+            continue
+        kind = _col_kind(s, col)
+        old = str(s.dtype)
+        if kind == "numeric":
+            df[col] = pd.to_numeric(s.astype(str).str.replace(",", ""), errors="coerce")
+        elif kind == "datetime":
+            df[col] = pd.to_datetime(s.astype(str), errors="coerce")
+        elif kind == "category":
+            df[col] = s.astype("category")
+        new = str(df[col].dtype)
+        if new != old:
+            changes.append({"col": str(col), "from": old, "to": new,
+                            "kind": kind, "failed_to_nan": int(df[col].isna().sum() - s.isna().sum())})
+    return changes
+
+
+def _missing_fix(df: pd.DataFrame, strategy: str, threshold: float) -> Dict:
+    """缺失值处理。strategy: none/delete/const/stat/interpolate"""
+    result = {"deleted_columns": [], "filled": []}
+    if strategy == "none":
+        return result
+    missing_ratio = df.isna().mean()
+    # 1) 删除策略：缺失率 > 阈值 删列
+    if strategy == "delete":
+        drop_cols = [str(c) for c in missing_ratio.index if missing_ratio[c] > threshold]
+        for c in drop_cols:
+            result["deleted_columns"].append({"col": c, "missing_ratio": round(float(missing_ratio[c]), 4)})
+        if drop_cols:
+            df.drop(columns=drop_cols, inplace=True)
+        return result
+
+    # 2/3/4) 填充策略
+    for col in df.columns:
+        s = df[col]
+        if s.isna().sum() == 0:
+            continue
+        filled_count = int(s.isna().sum())
+        kind = _col_kind(s, col)
+        if strategy == "const":
+            # 常数填充：数值填 0，分类/文本填"未知"
+            if kind == "numeric":
+                df[col] = s.fillna(0)
+                used = "常数0"
+            else:
+                df[col] = s.fillna("未知")
+                used = "常数「未知」"
+        elif strategy == "stat":
+            if kind == "numeric":
+                # 偏态（|skew|>1）用中位数，正态用均值
+                skew = float(s.skew()) if s.notna().nunique() > 1 else 0.0
+                fill_val = float(s.median()) if abs(skew) > 1 else float(s.mean())
+                df[col] = s.fillna(fill_val)
+                used = f"统计量({'中位数' if abs(skew) > 1 else '均值'})"
+            else:
+                mode_vals = s.dropna().mode()
+                fill_val = mode_vals.iloc[0] if len(mode_vals) > 0 else "未知"
+                df[col] = s.fillna(fill_val)
+                used = "众数"
+        elif strategy == "interpolate":
+            if kind == "numeric":
+                df[col] = s.interpolate(method="linear", limit_direction="both")
+                # 首尾仍可能 NaN → 用中位数兜底
+                if df[col].isna().any():
+                    df[col] = df[col].fillna(float(s.median()) if s.notna().nunique() else 0)
+                used = "线性插值"
+            else:
+                df[col] = s.ffill().bfill().fillna("未知")
+                used = "前向/后向填充"
+        filled_now = int(df[col].isna().sum())
+        result["filled"].append({"col": str(col), "method": used, "filled": filled_count,
+                                 "remaining": filled_now})
+    return result
+
+
+def _dup_fix(df: pd.DataFrame) -> int:
+    """删除完全重复行，返回删除行数"""
+    before = len(df)
+    df.drop_duplicates(inplace=True)
+    return before - len(df)
+
+
+@app.post("/clean_run")
+async def clean_run(file_path: str = Query(), type_fix: bool = Query(True),
+                    missing_strategy: str = Query("stat"), missing_threshold: float = Query(0.6),
+                    dup_fix: bool = Query(True)):
+    """智能清洗工作台：类型纠正 + 缺失值处理（删除/常数/统计量/插值）+ 重复值处理。
+    全部后端确定性执行；返回清洗前后质量对比、执行明细与下载文件。"""
+    try:
+        df = _validate_and_load(file_path)
+    except Exception as e:
+        return {"code": -1, "msg": f"读取数据失败: {str(e)}"}
+    before = compute_quality_report(df)
+    before_df = df.copy()
+
+    if missing_strategy not in ("none", "delete", "const", "stat", "interpolate"):
+        missing_strategy = "stat"
+
+    type_changes, missing_res, dup_removed = [], {}, 0
+    try:
+        if type_fix:
+            type_changes = _type_fix(df)
+        missing_res = _missing_fix(df, missing_strategy, missing_threshold)
+        if dup_fix:
+            dup_removed = _dup_fix(df)
+    except Exception as e:
+        return {"code": -1, "msg": f"清洗执行失败: {str(e)}"}
+
+    after = compute_quality_report(df)
+    diff = _make_diff(before, after)
+
+    # 保存（category 列转 object 兼容 CSV）
+    save_df = df.copy()
+    for c in save_df.select_dtypes(include="category").columns:
+        save_df[c] = save_df[c].astype(object)
+    try:
+        clean_path, clean_name = _save_cleaned(save_df, file_path)
+    except Exception as e:
+        return {"code": -1, "msg": f"保存清洗结果失败: {str(e)}"}
+
+    eda_check = _eda_recheck(before_df, save_df)
+    return {"code": 0, "msg": "清洗完成", "data": _json_safe({
+        "before": before, "after": after, "diff": diff,
+        "type_changes": type_changes,
+        "missing": missing_res,
+        "dup_removed": dup_removed,
+        "eda_check": eda_check,
+        "clean_path": clean_path, "clean_name": clean_name,
+    })}
+# ================= 特征构造 /fe_construct =================
+# 四大类（全部由后端确定性执行，前端只传选项）：
+#   1. 聚合统计特征：按分组列分组，对数值列计算均值/最大值/标准差/偏度/中位数/计数等
+#   2. 组合交叉特征：两个数值列四则运算，生成新特征列
+#   3. 时序特征：从时间列提取周期信息（年/月/日/星期/季度/周/小时）
+#   4. 频次与计数特征：统计类别值全局出现次数，生成频次特征列
+AGG_STATS = ("mean", "max", "min", "std", "skew", "median", "sum", "count")
+AGG_STAT_CN = {"mean": "均值", "max": "最大值", "min": "最小值", "std": "标准差",
+               "skew": "偏度", "median": "中位数", "sum": "求和", "count": "计数"}
+TIME_PARTS = ("year", "month", "day", "weekday", "quarter", "week", "hour")
+TIME_PART_CN = {"year": "年", "month": "月", "day": "日", "weekday": "星期",
+                "quarter": "季度", "week": "周", "hour": "小时"}
+
+
+def _fe_construct(df: pd.DataFrame, ops: List[Dict]):
+    """特征构造四大类，白名单确定性执行。返回 (df, added_cols, summary_parts)。"""
+    df = df.copy()
+    added = []
+    parts = []
+    for item in ops or []:
+        if not isinstance(item, dict) or not item.get("type"):
+            raise ValueError("特征构造项缺少 type 字段")
+        t = str(item["type"])
+        if t == "agg":  # 聚合统计特征
+            g = item.get("group_col")
+            v = item.get("value_col")
+            stats = item.get("stats") or []
+            if not g or not v:
+                raise ValueError("聚合统计：请选择分组列与聚合列")
+            _check_col(df, g)
+            _check_col(df, v)
+            for st in stats:
+                if st not in AGG_STATS:
+                    raise ValueError("聚合统计：不支持的统计量 " + st)
+            s = pd.to_numeric(df[v], errors="coerce")
+            for st in stats:
+                name = v + "_" + AGG_STAT_CN[st]
+                if name in df.columns:
+                    raise ValueError("聚合统计：新列已存在 " + name)
+                df[name] = s.groupby(df[g]).transform(st)
+                added.append(name)
+                parts.append("按「" + g + "」分组计算「" + v + "」" + AGG_STAT_CN[st])
+        elif t == "combine":  # 组合交叉特征（四则运算）
+            col1 = item.get("col1")
+            col2 = item.get("col2")
+            operator = item.get("operator")
+            new_name = (item.get("new_name") or "").strip()
+            if not col1 or not col2:
+                raise ValueError("组合交叉：请选择两个列")
+            _check_col(df, col1)
+            _check_col(df, col2)
+            if col1 == col2:
+                raise ValueError("组合交叉：两个列不能相同")
+            if operator not in ("+", "-", "*", "/"):
+                raise ValueError("组合交叉：不支持的运算符 " + operator)
+            if not new_name:
+                raise ValueError("组合交叉：新列名不能为空")
+            if new_name in df.columns:
+                raise ValueError("组合交叉：新列名已存在 " + new_name)
+            s1 = pd.to_numeric(df[col1], errors="coerce")
+            s2 = pd.to_numeric(df[col2], errors="coerce")
+            if operator == "+":
+                res = s1 + s2
+            elif operator == "-":
+                res = s1 - s2
+            elif operator == "*":
+                res = s1 * s2
+            else:
+                res = s1 / s2
+            df[new_name] = res
+            op_cn = {"+": "加", "-": "减", "*": "乘", "/": "除"}[operator]
+            added.append(new_name)
+            parts.append("「" + col1 + "」" + op_cn + "「" + col2 + "」→ " + new_name)
+        elif t == "time":  # 时序特征
+            tc = item.get("time_col")
+            plist = item.get("parts") or []
+            if not tc:
+                raise ValueError("时序特征：请选择时间列")
+            _check_col(df, tc)
+            ts = pd.to_datetime(df[tc], errors="coerce")
+            if ts.isna().all():
+                raise ValueError("时序特征：时间列无法解析 " + tc)
+            for p in plist:
+                if p not in TIME_PARTS:
+                    raise ValueError("时序特征：不支持的提取项 " + p)
+                name = tc + "_" + TIME_PART_CN[p]
+                if name in df.columns:
+                    raise ValueError("时序特征：新列已存在 " + name)
+                if p == "year":
+                    df[name] = ts.dt.year
+                elif p == "month":
+                    df[name] = ts.dt.month
+                elif p == "day":
+                    df[name] = ts.dt.day
+                elif p == "weekday":
+                    df[name] = ts.dt.dayofweek
+                elif p == "quarter":
+                    df[name] = ts.dt.quarter
+                elif p == "week":
+                    df[name] = ts.dt.isocalendar().week.astype("Int64")
+                elif p == "hour":
+                    df[name] = ts.dt.hour
+                added.append(name)
+                parts.append("从「" + tc + "」提取" + TIME_PART_CN[p])
+        elif t == "freq":  # 频次与计数特征
+            cc = item.get("cat_col")
+            new_name = (item.get("new_name") or (cc + "_频次")).strip()
+            if not cc:
+                raise ValueError("频次与计数：请选择类别列")
+            _check_col(df, cc)
+            if not new_name:
+                raise ValueError("频次与计数：新列名不能为空")
+            if new_name in df.columns:
+                raise ValueError("频次与计数：新列已存在 " + new_name)
+            df[new_name] = df[cc].map(df[cc].value_counts())
+            added.append(new_name)
+            parts.append("「" + cc + "」类别全局频次 → " + new_name)
+        else:
+            raise ValueError("未知特征构造类型: " + t)
+    return df, added, parts
+
+
+@app.post("/fe_construct")
+async def fe_construct(file_path: str = Query(), ops_json: str = Query(..., description="特征构造操作 JSON 数组")):
+    """特征构造工作台：聚合统计 / 组合交叉 / 时序 / 频次计数，全部后端确定性执行。"""
+    try:
+        df = _validate_and_load(file_path)
+    except Exception as e:
+        return {"code": -1, "msg": "读取数据失败: " + str(e)}
+    before = compute_quality_report(df)
+    try:
+        ops = json.loads(ops_json)
+        if not isinstance(ops, list):
+            raise ValueError("操作参数必须是数组")
+        df2, added, parts = _fe_construct(df, ops)
+    except Exception as e:
+        return {"code": -1, "msg": "特征构造失败: " + str(e)}
+    after = compute_quality_report(df2)
+    # category 列转 object 兼容 CSV
+    save_df = df2.copy()
+    for c in save_df.select_dtypes(include="category").columns:
+        save_df[c] = save_df[c].astype(object)
+    try:
+        clean_path, clean_name = _save_cleaned(save_df, file_path)
+    except Exception as e:
+        return {"code": -1, "msg": "保存结果失败: " + str(e)}
+    summary = "；".join(parts) if parts else "未执行任何特征构造"
+    return {"code": 0, "msg": "特征构造完成", "data": _json_safe({
+        "summary": summary,
+        "added_cols": added,
+        "before": before,
+        "after": after,
+        "clean_path": clean_path,
+        "clean_name": clean_name,
+    })}
+# ================= 数据变换与规范化 /fe_transform =================
+# 三类（全部由后端确定性执行，前端只传选项，替换所选数值列原值）：
+#   1. standardize 标准化： (x - mean) / std，适用于线性模型、SVM、PCA
+#   2. minmax 归一化：      (x - min) / (max - min) → [0,1]，适用于神经网络、距离计算（KNN）
+#   3. robust 稳健缩放：    (x - median) / IQR，受异常值影响小
+TRANSFORM_TYPES = ("standardize", "minmax", "robust")
+TRANSFORM_CN = {"standardize": "标准化", "minmax": "归一化", "robust": "稳健缩放"}
+
+
+def _fe_transform(df: pd.DataFrame, ops: List[Dict]):
+    """数据变换与规范化，白名单确定性执行。返回 (df, changed)。"""
+    df = df.copy()
+    changed = []
+    for item in ops or []:
+        if not isinstance(item, dict) or not item.get("type"):
+            raise ValueError("变换项缺少 type 字段")
+        t = str(item["type"])
+        if t not in TRANSFORM_TYPES:
+            raise ValueError("不支持的变换类型: " + t)
+        cols = item.get("columns") or []
+        if not cols:
+            raise ValueError(TRANSFORM_CN[t] + "：请选择至少一个数值列")
+        for c in cols:
+            _check_col(df, c)
+            s = pd.to_numeric(df[c], errors="coerce")
+            if s.nunique() < 2:
+                raise ValueError(TRANSFORM_CN[t] + "：列「" + c + "」有效值不足，无法变换")
+            before = {"mean": float(s.mean()), "std": float(s.std(ddof=0)), "min": float(s.min()), "max": float(s.max()), "median": float(s.median())}
+            if t == "standardize":
+                mean = float(s.mean())
+                std = float(s.std(ddof=0))
+                if std == 0 or not std or std != std:
+                    raise ValueError("标准化：列「" + c + "」标准差为 0，无法标准化")
+                df[c] = (s - mean) / std
+            elif t == "minmax":
+                mn = float(s.min())
+                mx = float(s.max())
+                if mx - mn == 0:
+                    raise ValueError("归一化：列「" + c + "」最大值等于最小值，无法归一化")
+                df[c] = (s - mn) / (mx - mn)
+            elif t == "robust":
+                med = float(s.median())
+                q1 = float(s.quantile(0.25))
+                q3 = float(s.quantile(0.75))
+                iqr = q3 - q1
+                if iqr == 0:
+                    raise ValueError("稳健缩放：列「" + c + "」IQR 为 0，无法缩放")
+                df[c] = (s - med) / iqr
+            s2 = pd.to_numeric(df[c], errors="coerce")
+            changed.append({"col": str(c), "type": t, "transform": TRANSFORM_CN[t],
+                            "before": before,
+                            "after": {"mean": float(s2.mean()), "std": float(s2.std(ddof=0)),
+                                      "min": float(s2.min()), "max": float(s2.max()),
+                                      "median": float(s2.median())}})
+    return df, changed
+
+
+@app.post("/fe_transform")
+async def fe_transform(file_path: str = Query(), ops_json: str = Query(..., description="变换操作 JSON 数组")):
+    """数据变换与规范化：标准化 / 归一化 / 稳健缩放，替换所选数值列原值，全部后端确定性执行。"""
+    try:
+        df = _validate_and_load(file_path)
+    except Exception as e:
+        return {"code": -1, "msg": "读取数据失败: " + str(e)}
+    before = compute_quality_report(df)
+    try:
+        ops = json.loads(ops_json)
+        if not isinstance(ops, list):
+            raise ValueError("操作参数必须是数组")
+        df2, changed = _fe_transform(df, ops)
+    except Exception as e:
+        return {"code": -1, "msg": "变换失败: " + str(e)}
+    after = compute_quality_report(df2)
+    save_df = df2.copy()
+    for c in save_df.select_dtypes(include="category").columns:
+        save_df[c] = save_df[c].astype(object)
+    try:
+        clean_path, clean_name = _save_cleaned(save_df, file_path)
+    except Exception as e:
+        return {"code": -1, "msg": "保存结果失败: " + str(e)}
+    parts = []
+    seen = set()
+    for ch in changed:
+        k = (ch["col"], ch["transform"])
+        if k not in seen:
+            seen.add(k)
+            parts.append("「" + ch["col"] + "」" + ch["transform"])
+    summary = "；".join(parts) if parts else "未执行任何变换"
+    return {"code": 0, "msg": "变换完成", "data": _json_safe({
+        "summary": summary,
+        "changed": changed,
+        "before": before,
+        "after": after,
+        "clean_path": clean_path,
+        "clean_name": clean_name,
+    })}

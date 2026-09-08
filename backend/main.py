@@ -25,10 +25,11 @@ from config import app
 # 显式导入各功能路由包，完成路由注册（顺序无依赖）
 import routes.chat     # noqa: F401
 import routes.image    # noqa: F401
-import routes.clean    # noqa: F401
-import routes.eda      # noqa: F401
-import routes.predict  # noqa: F401
-import routes.train    # noqa: F401
+import routes.clean         # noqa: F401
+import routes.eda           # noqa: F401
+import routes.predict       # noqa: F401
+import routes.preprocess    # noqa: F401  数据探索/特征工程：诊断—治疗闭环与 /preprocess_run
+import routes.train         # noqa: F401
 
 if __name__ == "__main__":
     import uvicorn

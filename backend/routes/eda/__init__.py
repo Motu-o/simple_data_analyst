@@ -1218,7 +1218,60 @@ async def eda_feature_report(
                     parts.insert(idx, sec.strip())
             report = "".join(parts)
 
-    return {"code": 0, "msg": "ok", "data": {"report": report, "model_name": model_name}}
+    # 结构化诊断 + 处方（确定性计算，不依赖大模型；供前端"诊断→处方→一键应用"闭环）
+    from routes.preprocess import diagnose_column
+    diag_rows = []
+    for c in num_cols:
+        d = diagnose_column(df[c], c)
+        nmiss = int(df[c].isna().sum())
+        miss_ratio = round(nmiss / total * 100, 2) if total else 0.0
+        if d["skew"] > 1:
+            level = "严重右偏"
+        elif d["skew"] < -1:
+            level = "严重左偏"
+        else:
+            level = "近似正态"
+        sug = "无需处理"
+        if d["skew"] > 1 and d["positive"]:
+            sug = "对数变换(log1p)"
+        elif d["skew"] > 1:
+            sug = "分箱处理"
+        elif d["skew"] < -1 and d["positive"]:
+            sug = "Box-Cox 变换"
+        elif d["skew"] < -1:
+            sug = "分箱处理"
+        if nmiss > 0:
+            sug = ("填充缺失(中位数) → " + sug) if sug != "无需处理" else "填充缺失(中位数)"
+        diag_rows.append({
+            "column": c, "skew": d["skew"], "skew_level": level,
+            "outlier_ratio": d["outlier_ratio"], "missing": nmiss, "missing_ratio": miss_ratio,
+            "suggestion": sug,
+        })
+
+    quality_issues = []
+    if dup > 0:
+        quality_issues.append({"type": "duplicate", "detail": f"重复行 {dup} 行（{dup / total * 100:.2f}%）", "action": "删除重复行"})
+    for r in diag_rows:
+        if r["missing_ratio"] >= 30:
+            quality_issues.append({"type": "missing", "detail": f"{r['column']} 缺失 {r['missing_ratio']}%", "action": "考虑删除该列或按业务填充"})
+    bad = [r for r in diag_rows if r["skew_level"] != "近似正态"]
+    if bad:
+        quality_issues.append({"type": "skew", "detail": f"{len(bad)} 个数值列偏态严重：" + "、".join(r["column"] for r in bad), "action": "执行对数/Box-Cox/分箱变换"})
+    high_out = [r for r in diag_rows if r["outlier_ratio"] > 0.1]
+    if high_out:
+        quality_issues.append({"type": "outlier", "detail": f"{len(high_out)} 列存在异常群组：" + "、".join(r["column"] for r in high_out), "action": "变换后复查离群占比"})
+
+    clean_advice = [it["action"] for it in quality_issues]
+    preprocess_advice = [{"column": r["column"], "action": r["suggestion"]} for r in diag_rows if r["suggestion"] != "无需处理"]
+    diagnosis = {
+        "columns": diag_rows,
+        "quality_issues": quality_issues,
+        "verdict": "数据整体质量良好，可直接建模" if not quality_issues else f"发现 {len(quality_issues)} 项数据质量/分布问题，建议按下方处方处理后再建模",
+        "clean_advice": clean_advice,
+        "preprocess_advice": preprocess_advice,
+    }
+
+    return {"code": 0, "msg": "ok", "data": {"report": report, "model_name": model_name, "diagnosis": diagnosis}}
 
 @app.get("/download_plot_zip")
 async def download_plot_zip(files: str = Query(default="", description="逗号分隔的 PNG 文件名，须为后端已生成的绘图文件")):
@@ -1243,3 +1296,82 @@ async def download_plot_zip(files: str = Query(default="", description="逗号�
     except Exception as e:
         return {"code": -1, "msg": f"打包失败: {str(e)}"}
     return FileResponse(zip_path, filename=zip_name, media_type="application/zip")
+
+# ============ 数据概览与探索：数据质量报告（确定性 pandas 计算，不调用大模型） ============
+@app.post("/data_overview")
+async def data_overview(file_path: str = Query()):
+    """一键数据质量报告：数据形状/列名与类型、数值/文本统计摘要、缺失与重复。"""
+    try:
+        df = load_df_checked(file_path)
+    except Exception as e:
+        return {"code": -1, "msg": str(e)}
+    total = int(len(df))
+    if total == 0:
+        return {"code": -1, "msg": "数据集为空，无法生成数据质量报告"}
+
+    # 1. 概览：列名 + 归一化数据类型
+    cols = []
+    for c in df.columns:
+        cname = str(c)
+        dt = df[c].dtype
+        if pd.api.types.is_datetime64_any_dtype(dt):
+            type_name = "datetime"
+        elif pd.api.types.is_numeric_dtype(dt):
+            type_name = "int" if pd.api.types.is_integer_dtype(dt) else "float"
+        else:
+            type_name = "object"
+        cols.append({"name": cname, "type": type_name, "dtype": str(dt)})
+
+    # 2. 数值列统计摘要：均值/标准差/分位数
+    num_summary = []
+    for c in df.select_dtypes(include="number").columns:
+        s = pd.to_numeric(df[c], errors="coerce")
+        has = bool(s.notna().any())
+        num_summary.append({
+            "column": str(c),
+            "count": int(s.notna().sum()),
+            "mean": round(float(s.mean()), 4) if has else None,
+            "std": round(float(s.std()), 4) if s.count() > 1 else None,
+            "min": round(float(s.min()), 4) if has else None,
+            "q25": round(float(s.quantile(0.25)), 4) if has else None,
+            "q50": round(float(s.quantile(0.5)), 4) if has else None,
+            "q75": round(float(s.quantile(0.75)), 4) if has else None,
+            "max": round(float(s.max()), 4) if has else None,
+        })
+
+    # 3. 文本列统计摘要：唯一值数量 + 众数
+    text_summary = []
+    for c in df.select_dtypes(exclude="number").columns:
+        cname = str(c)
+        s_obj = df[c].astype(str)
+        mode_ser = s_obj.mode()
+        mode = str(mode_ser.iloc[0]) if len(mode_ser) else ""
+        text_summary.append({
+            "column": cname,
+            "nunique": int(df[c].nunique(dropna=True)),
+            "mode": mode,
+            "mode_count": int((s_obj == mode).sum()),
+        })
+
+    # 4. 缺失统计：每列缺失数 + 比例
+    missing = []
+    for c in df.columns:
+        n = int(df[c].isna().sum())
+        missing.append({"column": str(c), "missing": n,
+                        "ratio": round(n / total * 100, 2) if total else 0.0})
+
+    # 5. 整行重复记录
+    dup = int(df.duplicated().sum())
+
+    return {
+        "code": 0,
+        "msg": "数据质量报告生成完成",
+        "data": {
+            "shape": {"rows": total, "cols": int(df.shape[1])},
+            "columns": cols,
+            "numeric_summary": num_summary,
+            "text_summary": text_summary,
+            "missing": missing,
+            "duplicates": {"count": dup, "ratio": round(dup / total * 100, 2) if total else 0.0},
+        },
+    }
