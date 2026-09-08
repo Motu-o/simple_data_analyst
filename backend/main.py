@@ -18,7 +18,7 @@
         train/__init__.py    模型训练：数据集切分、算法推荐、代码生成、超参数训练与 loss 曲线
 
 前端（frontend/）：单页 index.html（数据清洗 / EDA 分析 / 模型训练 / 预测分析四大模块
-+ 奶龙聊天 + 开局视频 start_up.mp4），通过 http://127.0.0.1:8000 调用本后端。
++ 奶龙聊天），通过 http://127.0.0.1:8000 调用本后端。
 """
 from config import app
 
